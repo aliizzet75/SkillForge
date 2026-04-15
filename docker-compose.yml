@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: skillforge-postgres
+    environment:
+      POSTGRES_USER: skillforge
+      POSTGRES_PASSWORD: skillforge123
+      POSTGRES_DB: skillforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - skillforge-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: skillforge-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - skillforge-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  skillforge-network:
+    driver: bridge

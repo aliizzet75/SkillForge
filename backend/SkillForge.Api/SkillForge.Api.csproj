@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\SkillForge.Core\SkillForge.Core.csproj" />
+    <ProjectReference Include="..\SkillForge.Games\SkillForge.Games.csproj" />
+    <ProjectReference Include="..\SkillForge.AI\SkillForge.AI.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
