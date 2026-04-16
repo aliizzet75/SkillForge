@@ -528,6 +528,8 @@
       },
       "SkillForge.AI/1.0.0": {
         "dependencies": {
+          "Microsoft.EntityFrameworkCore": "10.0.6",
+          "Microsoft.EntityFrameworkCore.Relational": "10.0.6",
           "SkillForge.Core": "1.0.0"
         },
         "runtime": {
@@ -539,6 +541,7 @@
       },
       "SkillForge.Core/1.0.0": {
         "dependencies": {
+          "Microsoft.EntityFrameworkCore.Relational": "10.0.6",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "10.0.1"
         },
         "runtime": {
@@ -550,6 +553,8 @@
       },
       "SkillForge.Games/1.0.0": {
         "dependencies": {
+          "Microsoft.EntityFrameworkCore": "10.0.6",
+          "Microsoft.EntityFrameworkCore.Relational": "10.0.6",
           "SkillForge.Core": "1.0.0"
         },
         "runtime": {

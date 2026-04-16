@@ -2645,6 +2645,7 @@
   "projectFileDependencyGroups": {
     "net10.0": [
       "Microsoft.EntityFrameworkCore.Design >= 10.0.6",
+      "Microsoft.EntityFrameworkCore.Relational >= 10.0.6",
       "Npgsql.EntityFrameworkCore.PostgreSQL >= 10.0.1"
     ]
   },
@@ -2694,6 +2695,10 @@
           "Microsoft.EntityFrameworkCore.Design": {
             "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
             "suppressParent": "All",
+            "target": "Package",
+            "version": "[10.0.6, )"
+          },
+          "Microsoft.EntityFrameworkCore.Relational": {
             "target": "Package",
             "version": "[10.0.6, )"
           },
