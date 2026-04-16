@@ -15,6 +15,19 @@
           }
         }
       },
+      "Microsoft.AspNetCore.SignalR/1.2.9": {
+        "type": "package",
+        "compile": {
+          "lib/netstandard2.0/_._": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/_._": {
+            "related": ".xml"
+          }
+        }
+      },
       "Microsoft.Build.Framework/18.0.2": {
         "type": "package",
         "compile": {
@@ -782,6 +795,19 @@
         "lib/netstandard2.0/Humanizer.dll",
         "lib/netstandard2.0/Humanizer.xml",
         "logo.png"
+      ]
+    },
+    "Microsoft.AspNetCore.SignalR/1.2.9": {
+      "sha512": "stJwCxfcXqY982p+4dRzlK1Qv2ISrpJrVRzUWvr9PximZXBMSYFVCtOPy9LI2WsjHH/zEL4jSh3Qn2fYZomyKg==",
+      "type": "package",
+      "path": "microsoft.aspnetcore.signalr/1.2.9",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/Microsoft.AspNetCore.SignalR.dll",
+        "lib/netstandard2.0/Microsoft.AspNetCore.SignalR.xml",
+        "microsoft.aspnetcore.signalr.1.2.9.nupkg.sha512",
+        "microsoft.aspnetcore.signalr.nuspec"
       ]
     },
     "Microsoft.Build.Framework/18.0.2": {
@@ -2628,6 +2654,7 @@
   },
   "projectFileDependencyGroups": {
     "net10.0": [
+      "Microsoft.AspNetCore.SignalR >= 1.2.9",
       "Microsoft.EntityFrameworkCore >= 10.0.6",
       "Microsoft.EntityFrameworkCore.Design >= 10.0.6",
       "Npgsql.EntityFrameworkCore.PostgreSQL >= 10.0.1",
@@ -2690,6 +2717,10 @@
       "net10.0": {
         "targetAlias": "net10.0",
         "dependencies": {
+          "Microsoft.AspNetCore.SignalR": {
+            "target": "Package",
+            "version": "[1.2.9, )"
+          },
           "Microsoft.EntityFrameworkCore": {
             "target": "Package",
             "version": "[10.0.6, )"
@@ -3145,5 +3176,17 @@
         }
       }
     }
-  }
+  },
+  "logs": [
+    {
+      "code": "NU1510",
+      "level": "Warning",
+      "warningLevel": 1,
+      "message": "PackageReference Microsoft.AspNetCore.SignalR will not be pruned. Consider removing this package from your dependencies, as it is likely unnecessary.",
+      "libraryId": "Microsoft.AspNetCore.SignalR",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    }
+  ]
 }

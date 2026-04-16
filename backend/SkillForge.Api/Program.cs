@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
+using SkillForge.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Add SignalR
+builder.Services.AddSignalR();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
@@ -25,6 +29,9 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+
+// Map SignalR hub
+app.MapHub<GameHub>("/hubs/game");
 
 // Health check endpoint
 app.MapGet("/health", async (SkillForgeDbContext dbContext) =>

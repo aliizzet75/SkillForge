@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SkillForge.Games")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f0275de022eb9a8f9e8389004866687905dab839")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+07c7b3e3073925e90b1cef10f41cba95cf60859e")]
 [assembly: System.Reflection.AssemblyProductAttribute("SkillForge.Games")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SkillForge.Games")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
