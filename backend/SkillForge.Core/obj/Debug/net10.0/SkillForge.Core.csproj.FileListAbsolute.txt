@@ -1,0 +1,14 @@
+/workspace/projects/skillforge/backend/SkillForge.Core/bin/Debug/net10.0/SkillForge.Core.deps.json
+/workspace/projects/skillforge/backend/SkillForge.Core/bin/Debug/net10.0/SkillForge.Core.runtimeconfig.json
+/workspace/projects/skillforge/backend/SkillForge.Core/bin/Debug/net10.0/SkillForge.Core.dll
+/workspace/projects/skillforge/backend/SkillForge.Core/bin/Debug/net10.0/SkillForge.Core.pdb
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/SkillForge.Core.csproj.AssemblyReference.cache
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/SkillForge.Core.GeneratedMSBuildEditorConfig.editorconfig
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/SkillForge.Core.AssemblyInfoInputs.cache
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/SkillForge.Core.AssemblyInfo.cs
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/SkillForge.Core.csproj.CoreCompileInputs.cache
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/SkillForge.Core.dll
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/refint/SkillForge.Core.dll
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/SkillForge.Core.pdb
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/SkillForge.Core.genruntimeconfig.cache
+/workspace/projects/skillforge/backend/SkillForge.Core/obj/Debug/net10.0/ref/SkillForge.Core.dll

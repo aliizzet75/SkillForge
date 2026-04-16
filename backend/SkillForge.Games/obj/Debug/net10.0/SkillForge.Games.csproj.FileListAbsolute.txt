@@ -1,0 +1,15 @@
+/workspace/projects/skillforge/backend/SkillForge.Games/bin/Debug/net10.0/SkillForge.Games.deps.json
+/workspace/projects/skillforge/backend/SkillForge.Games/bin/Debug/net10.0/SkillForge.Games.dll
+/workspace/projects/skillforge/backend/SkillForge.Games/bin/Debug/net10.0/SkillForge.Games.pdb
+/workspace/projects/skillforge/backend/SkillForge.Games/bin/Debug/net10.0/SkillForge.Core.dll
+/workspace/projects/skillforge/backend/SkillForge.Games/bin/Debug/net10.0/SkillForge.Core.pdb
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/SkillForge.Games.csproj.AssemblyReference.cache
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/SkillForge.Games.GeneratedMSBuildEditorConfig.editorconfig
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/SkillForge.Games.AssemblyInfoInputs.cache
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/SkillForge.Games.AssemblyInfo.cs
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/SkillForge.Games.csproj.CoreCompileInputs.cache
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/SkillFor.A2FCAED8.Up2Date
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/SkillForge.Games.dll
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/refint/SkillForge.Games.dll
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/SkillForge.Games.pdb
+/workspace/projects/skillforge/backend/SkillForge.Games/obj/Debug/net10.0/ref/SkillForge.Games.dll
