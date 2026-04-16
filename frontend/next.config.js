@@ -7,6 +7,7 @@ const withPWA = require('next-pwa')({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  turbopack: {}, // Empty config to enable Turbopack
   devIndicators: {
     buildActivity: false,
   },
