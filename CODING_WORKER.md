@@ -1,0 +1,1 @@
+Coding Worker (qwen3-coder:480b-cloud) ist bereit.
