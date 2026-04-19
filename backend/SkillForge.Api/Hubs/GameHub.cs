@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using System.Collections.Concurrent;
 using SkillForge.Core.StateMachine;
 using SkillForge.Core.Models;
 using SkillForge.Games;
@@ -39,7 +40,7 @@ public class GameHub : Hub<IGameClient>
     private static readonly Dictionary<string, GameStateMachine> _playerStates = new();
     private static readonly Dictionary<string, string> _playerRooms = new();
     private static readonly List<string> _waitingPlayers = new();
-    private static readonly Dictionary<string, RoomGameState> _roomGameStates = new(); // Track game state per room
+    private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new(); // Track game state per room
 
     public async Task EnterLobby(string playerName, string avatar)
     {
@@ -133,6 +134,7 @@ public class GameHub : Hub<IGameClient>
         await Clients.Group(roomId).ShowColors(roundData, 2000); // Show for 2 seconds
         
         // After showing colors, start input phase
+        // TODO: move to background service to avoid holding SignalR context
         await Task.Delay(2000);
         await Clients.Group(roomId).HideColors();
         await Clients.Group(roomId).RoundInputPhase();
