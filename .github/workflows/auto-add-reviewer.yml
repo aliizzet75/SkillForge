@@ -1,0 +1,15 @@
+name: Auto Add Reviewer
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+jobs:
+  add-reviewer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add claude-reviewer as reviewer
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --add-reviewer claude-reviewer
+        env:
+          GH_TOKEN: ${{ secrets.REVIEWER_TOKEN }}
