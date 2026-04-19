@@ -1,0 +1,38 @@
+name: Auto PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: github.actor != 'ali-erkol'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR diff
+        id: diff
+        run: |
+          DIFF=$(git diff origin/main...HEAD | head -c 8000)
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post review as ali-erkol
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          TITLE="${{ github.event.pull_request.title }}"
+          DIFF="${{ steps.diff.outputs.diff }}"
+
+          REVIEW_BODY="## Code Review by ali-erkol (Claude AI)\n\n**PR:** $TITLE\n\n### Diff-Analyse:\n\`\`\`\n${DIFF:0:3000}\n\`\`\`\n\n_Dieses Review wurde automatisch durch Claude Code generiert._"
+
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.REVIEWER_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            -d "{\"body\": \"$(echo -e "$REVIEW_BODY" | sed 's/"/\\"/g')\"}"
+        env:
+          REVIEWER_TOKEN: ${{ secrets.REVIEWER_TOKEN }}
