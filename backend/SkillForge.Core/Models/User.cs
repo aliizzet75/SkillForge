@@ -17,6 +17,12 @@ public class User
     [MaxLength(255)]
     public string? PasswordHash { get; set; }
     
+    [MaxLength(20)]
+    public string? SocialProvider { get; set; } // "google", "facebook", "github", etc.
+    
+    [MaxLength(255)]
+    public string? SocialProviderId { get; set; } // External provider user ID
+    
     [MaxLength(2)]
     public string? CountryCode { get; set; }
     
