@@ -1,11 +1,11 @@
 'use client';
-export const dynamic = 'force-dynamic';
 
+import { Suspense } from 'react';
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authService } from '@/services/auth';
 
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -20,7 +20,6 @@ export default function AuthCallbackPage() {
     }
 
     if (token) {
-      // Store token and fetch user info
       fetchUserInfo(token);
     } else {
       router.push('/login?error=no_token');
@@ -56,5 +55,22 @@ export default function AuthCallbackPage() {
         <p className="text-white text-lg">Completing login...</p>
       </div>
     </div>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin text-4xl mb-4">⏳</div>
+            <p className="text-white text-lg">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <AuthCallbackContent />
+    </Suspense>
   );
 }
