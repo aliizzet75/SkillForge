@@ -35,6 +35,7 @@ public class RoomGameState
     public Dictionary<string, string> PlayerConnectionIds { get; set; } = new();
     public CancellationTokenSource RoundCts { get; set; } = new();
     public int SubmittedAnswersCount => PlayerRoundAnswers.Count;
+    public long RoundStartTimeMs { get; set; } = 0; // Timestamp when input phase starts
     private readonly object _lock = new();
     
     public bool TryAddAnswer(string playerId, (int timeMs, string[] answers) answer)
@@ -181,6 +182,9 @@ public class GameHub : Hub<IGameClient>
             await Clients.Group(roomId).HideColors();
             await Clients.Group(roomId).RoundInputPhase();
             
+            // Set round start time on server (prevents client-side cheating)
+            gameState.RoundStartTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            
             // Reset player answers for this round
             gameState.ClearAnswers();
         }
@@ -191,7 +195,7 @@ public class GameHub : Hub<IGameClient>
         }
     }
 
-    public async Task SubmitAnswer(string[] colors, int timeMs)
+    public async Task SubmitAnswer(string[] colors)
     {
         var playerId = Context.ConnectionId;
         
@@ -200,6 +204,10 @@ public class GameHub : Hub<IGameClient>
             
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
+
+        // Calculate response time server-side (prevents client-side cheating)
+        var currentTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var timeMs = (int)(currentTimeMs - gameState.RoundStartTimeMs);
 
         // Store player's answer (thread-safe)
         gameState.TryAddAnswer(playerId, (timeMs, colors));

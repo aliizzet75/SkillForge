@@ -7,7 +7,6 @@ export default function Home() {
   const [playerName, setPlayerName] = useState('');
   const [avatar, setAvatar] = useState('🧙‍♀️');
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  const [roundStartTime, setRoundStartTime] = useState<number>(0);
   
   const {
     user,
@@ -51,14 +50,12 @@ export default function Home() {
     
     // Check if player selected all colors
     if (newSelected.length === currentGame.data.length) {
-      const timeMs = Date.now() - roundStartTime;
-      submitAnswer(newSelected, timeMs);
+      submitAnswer(newSelected); // Time is calculated server-side for anti-cheat protection
       setSelectedColors([]);
     }
   };
 
   const handleStartInputPhase = () => {
-    setRoundStartTime(Date.now());
     setSelectedColors([]);
   };
 
