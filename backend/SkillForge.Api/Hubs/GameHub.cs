@@ -161,7 +161,8 @@ public class GameHub : Hub<IGameClient>
         gameState.CurrentRound = round;
         
         // Generate round data using MemoryColorsGame
-        var roundData = gameState.GameEngine.GenerateData(1, round); // difficulty = 1 for now
+        // Use round number as difficulty to increase challenge with each round
+        var roundData = gameState.GameEngine.GenerateData(round, round);
         gameState.CurrentRoundData = roundData;
 
         // Notify players that round is starting
