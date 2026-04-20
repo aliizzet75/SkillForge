@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useGameStore, initializeSignalR, enterLobby, playRandom, gameComplete, leaveLobby } from '@/store/gameStore';
+import { useGameStore, initializeSignalR, enterLobby, playRandom, submitAnswer, leaveLobby } from '@/store/gameStore';
 
 export default function Home() {
   const [playerName, setPlayerName] = useState('');
   const [avatar, setAvatar] = useState('🧙‍♀️');
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [roundStartTime, setRoundStartTime] = useState<number>(0);
-  const [showColors, setShowColors] = useState(false);
   
   const {
     user,
@@ -18,10 +17,14 @@ export default function Home() {
     isInGame,
     currentGame,
     onlinePlayers,
+    showColors,
+    isInputPhase,
+    roundResults,
+    matchResults,
     setUser,
     setInLobby,
     setMatchmaking,
-    setInGame,
+    setSelectedColors: setStoreSelectedColors,
   } = useGameStore();
 
   // Initialize SignalR on mount
@@ -41,21 +44,33 @@ export default function Home() {
   };
 
   const handleColorSelect = (color: string) => {
-    if (!currentGame?.data) return;
+    if (!isInputPhase || !currentGame?.data) return;
     
     const newSelected = [...selectedColors, color];
     setSelectedColors(newSelected);
     
+    // Check if player selected all colors
     if (newSelected.length === currentGame.data.length) {
-      const time = Date.now() - roundStartTime;
-      gameComplete(100, time);
+      const timeMs = Date.now() - roundStartTime;
+      submitAnswer(newSelected, timeMs);
       setSelectedColors([]);
     }
   };
 
-  const handleStartGame = () => {
-    setShowColors(false);
+  const handleStartInputPhase = () => {
     setRoundStartTime(Date.now());
+    setSelectedColors([]);
+  };
+
+  const handlePlayAgain = () => {
+    useGameStore.setState({
+      isInGame: false,
+      currentGame: null,
+      matchResults: null,
+      roundResults: null,
+      showColors: false,
+      isInputPhase: false,
+    });
     setSelectedColors([]);
   };
 
@@ -112,6 +127,51 @@ export default function Home() {
     );
   }
 
+  // Match Over Screen
+  if (matchResults && isInGame) {
+    const { Results, Player1Score, Player2Score, WinnerConnectionId, IsTie } = matchResults;
+    const myConnectionId = useGameStore.getState().user?.id || '';
+    const isWinner = WinnerConnectionId === myConnectionId;
+    
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 text-center">
+          <h1 className="text-3xl font-bold text-white mb-6">🏁 Spiel beendet!</h1>
+          
+          {IsTie ? (
+            <div className="text-6xl mb-4">🤝</div>
+          ) : isWinner ? (
+            <div className="text-6xl mb-4">🏆</div>
+          ) : (
+            <div className="text-6xl mb-4">😔</div>
+          )}
+          
+          <p className="text-2xl font-bold text-white mb-2">
+            {IsTie ? 'Unentschieden!' : isWinner ? 'Du hast gewonnen!' : 'Du hast verloren!'}
+          </p>
+          
+          <div className="flex justify-center gap-8 my-6">
+            <div className="text-center">
+              <p className="text-white/60 text-sm">Spieler 1</p>
+              <p className="text-3xl font-bold text-white">{Player1Score || 0}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-white/60 text-sm">Spieler 2</p>
+              <p className="text-3xl font-bold text-white">{Player2Score || 0}</p>
+            </div>
+          </div>
+          
+          <button
+            onClick={handlePlayAgain}
+            className="w-full py-4 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl transition-all"
+          >
+            🔄 Nochmal spielen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Game Screen (Memory Colors)
   if (isInGame && currentGame) {
     const { data, round, totalRounds, opponentName } = currentGame;
@@ -132,53 +192,64 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Round Results Panel */}
+          {roundResults && (
+            <div className="bg-white/20 backdrop-blur-lg rounded-xl p-6 mb-6 border border-white/30">
+              <h3 className="text-xl font-bold text-white text-center mb-4">Runde {roundResults.Round} Ergebnis</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {roundResults.Results && Object.entries(roundResults.Results).map(([playerId, result]: [string, any]) => (
+                  <div key={playerId} className="bg-white/10 rounded-lg p-4 text-center">
+                    <p className="text-white/60 text-sm">{result.PlayerAlias || 'Spieler'}</p>
+                    <p className="text-2xl font-bold text-white">{result.TotalScore} Punkte</p>
+                    <p className="text-green-400 text-sm">+{result.Score} diese Runde</p>
+                    {result.IsPerfect && <span className="text-yellow-400 text-xs">⭐ Perfekt!</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Game Area */}
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
             {/* Show Colors Phase */}
             {showColors ? (
               <div className="text-center">
-                <p className="text-white mb-4">Merke dir die Reihenfolge:</p>
-                <div className="flex justify-center gap-4 text-6xl mb-6">
+                <p className="text-white mb-4 text-lg">👀 Merke dir die Reihenfolge:</p>
+                <div className="flex justify-center gap-4 text-7xl mb-6">
                   {data?.map((color: string, i: number) => (
                     <div key={i} className="animate-pulse">{color}</div>
                   ))}
                 </div>
-                <button
-                  onClick={handleStartGame}
-                  className="py-3 px-8 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl"
-                >
-                  ✅ Fertig
-                </button>
+                <p className="text-white/60 text-sm">Die Farben verschwinden automatisch...</p>
               </div>
-            ) : (
+            ) : isInputPhase ? (
               <div>
-                <p className="text-white text-center mb-4">Klicke die Farben in der richtigen Reihenfolge:</p>
+                <p className="text-white text-center mb-4 text-lg">🖱️ Klicke die Farben in der richtigen Reihenfolge:</p>
                 
                 {/* Selected Colors */}
                 <div className="flex justify-center gap-2 mb-6 min-h-[3rem]">
                   {selectedColors.map((color, i) => (
                     <span key={i} className="text-4xl">{color}</span>
                   ))}
+                  {/* Placeholder for remaining colors */}
+                  {data && Array.from({ length: data.length - selectedColors.length }).map((_, i) => (
+                    <span key={`placeholder-${i}`} className="text-4xl text-white/20">⭕</span>
+                  ))}
                 </div>
 
                 {/* Color Grid */}
                 <div className="grid grid-cols-4 gap-4">
                   {['🔴', '🟢', '🔵', '🟡', '🟣', '🟠', '⚫', '⚪'].map((color) => {
-                    const isSelected = selectedColors.includes(color) && 
-                      data?.indexOf(color) === selectedColors.indexOf(color);
-                    const isWrong = selectedColors.includes(color) &&
-                      data?.indexOf(color) !== selectedColors.indexOf(color);
+                    const isSelected = selectedColors.includes(color);
                     
                     return (
                       <button
                         key={color}
                         onClick={() => handleColorSelect(color)}
-                        disabled={selectedColors.includes(color)}
+                        disabled={isSelected}
                         className={`
                           p-4 text-4xl rounded-xl transition-all transform hover:scale-110
-                          ${isWrong ? 'bg-red-500/50 opacity-50' : ''}
-                          ${isSelected ? 'bg-green-500/50' : 'bg-white/10 hover:bg-white/20'}
-                          ${selectedColors.includes(color) ? 'opacity-50' : ''}
+                          ${isSelected ? 'bg-gray-500/50 opacity-30' : 'bg-white/10 hover:bg-white/30'}
                         `}
                       >
                         {color}
@@ -186,6 +257,11 @@ export default function Home() {
                     );
                   })}
                 </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="animate-spin text-4xl mb-4">⏳</div>
+                <p className="text-white">Warte auf nächste Runde...</p>
               </div>
             )}
           </div>

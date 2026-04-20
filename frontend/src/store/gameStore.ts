@@ -28,6 +28,11 @@ interface GameState {
     opponentAvatar: string;
   } | null;
   onlinePlayers: { id: string; username: string; countryCode?: string }[];
+  // Game phase
+  showColors: boolean;
+  isInputPhase: boolean;
+  roundResults: any | null;
+  matchResults: any | null;
   
   // Actions
   setUser: (user: User | null) => void;
@@ -37,6 +42,10 @@ interface GameState {
   setInGame: (inGame: boolean) => void;
   setCurrentGame: (game: any) => void;
   setOnlinePlayers: (players: any[]) => void;
+  setShowColors: (show: boolean) => void;
+  setInputPhase: (isInput: boolean) => void;
+  setRoundResults: (results: any) => void;
+  setMatchResults: (results: any) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -47,6 +56,10 @@ export const useGameStore = create<GameState>((set) => ({
   isInGame: false,
   currentGame: null,
   onlinePlayers: [],
+  showColors: false,
+  isInputPhase: false,
+  roundResults: null,
+  matchResults: null,
   
   setUser: (user) => set({ user }),
   setConnected: (isConnected) => set({ isConnected }),
@@ -55,6 +68,10 @@ export const useGameStore = create<GameState>((set) => ({
   setInGame: (isInGame) => set({ isInGame }),
   setCurrentGame: (currentGame) => set({ currentGame }),
   setOnlinePlayers: (onlinePlayers) => set({ onlinePlayers }),
+  setShowColors: (showColors) => set({ showColors }),
+  setInputPhase: (isInputPhase) => set({ isInputPhase }),
+  setRoundResults: (roundResults) => set({ roundResults }),
+  setMatchResults: (matchResults) => set({ matchResults }),
 }));
 
 // SignalR Connection
@@ -101,18 +118,49 @@ export const initializeSignalR = async () => {
     }
   });
   
+  connection.on('ShowColors', (colors: any, durationMs: number) => {
+    console.log('Show colors:', colors, 'for', durationMs, 'ms');
+    const currentGame = useGameStore.getState().currentGame;
+    if (currentGame) {
+      useGameStore.getState().setCurrentGame({ ...currentGame, data: colors });
+    }
+    useGameStore.getState().setShowColors(true);
+    useGameStore.getState().setInputPhase(false);
+  });
+  
+  connection.on('HideColors', () => {
+    console.log('Hide colors');
+    useGameStore.getState().setShowColors(false);
+  });
+  
+  connection.on('RoundInputPhase', () => {
+    console.log('Round input phase started');
+    useGameStore.getState().setInputPhase(true);
+  });
+  
+  connection.on('RoundStarting', (round: number, totalRounds: number) => {
+    console.log('Round starting:', round, 'of', totalRounds);
+    useGameStore.getState().setRoundResults(null);
+    useGameStore.getState().setShowColors(false);
+    useGameStore.getState().setInputPhase(false);
+  });
+  
   connection.on('OpponentFinished', (playerName: string) => {
     console.log('Opponent finished:', playerName);
   });
   
   connection.on('RoundResult', (result: any) => {
     console.log('Round result:', result);
+    useGameStore.getState().setRoundResults(result);
+    useGameStore.getState().setShowColors(false);
+    useGameStore.getState().setInputPhase(false);
   });
   
   connection.on('MatchOver', (result: any) => {
     console.log('Match over:', result);
-    useGameStore.getState().setInGame(false);
-    useGameStore.getState().setCurrentGame(null);
+    useGameStore.getState().setMatchResults(result);
+    useGameStore.getState().setShowColors(false);
+    useGameStore.getState().setInputPhase(false);
   });
   
   connection.on('OpponentDisconnected', () => {
@@ -162,10 +210,10 @@ export const playRandom = async () => {
   }
 };
 
-export const gameComplete = async (score: number, timeMs: number) => {
+export const submitAnswer = async (colors: string[], timeMs: number) => {
   const conn = getSignalRConnection();
   if (conn) {
-    await conn.invoke('GameComplete', score, timeMs);
+    await conn.invoke('SubmitAnswer', colors, timeMs);
   }
 };
 
