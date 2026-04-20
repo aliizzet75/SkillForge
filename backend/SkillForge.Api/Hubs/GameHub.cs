@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
+using Microsoft.AspNetCore.SignalR;
 using SkillForge.Core.StateMachine;
 using SkillForge.Core.Models;
 using SkillForge.Games;
@@ -33,13 +33,43 @@ public class RoomGameState
     public Dictionary<string, (int timeMs, string[] answers)> PlayerRoundAnswers { get; set; } = new();
     public MemoryColorsGame GameEngine { get; set; } = new();
     public Dictionary<string, string> PlayerConnectionIds { get; set; } = new();
+    public CancellationTokenSource RoundCts { get; set; } = new();
+    public int SubmittedAnswersCount => PlayerRoundAnswers.Count;
+    private readonly object _lock = new();
+    
+    public bool TryAddAnswer(string playerId, (int timeMs, string[] answers) answer)
+    {
+        lock (_lock)
+        {
+            if (PlayerRoundAnswers.ContainsKey(playerId))
+                return false;
+            PlayerRoundAnswers[playerId] = answer;
+            return true;
+        }
+    }
+    
+    public int GetAnswerCount()
+    {
+        lock (_lock)
+        {
+            return PlayerRoundAnswers.Count;
+        }
+    }
+    
+    public void ClearAnswers()
+    {
+        lock (_lock)
+        {
+            PlayerRoundAnswers.Clear();
+        }
+    }
 }
 
 public class GameHub : Hub<IGameClient>
 {
-    private static readonly Dictionary<string, GameStateMachine> _playerStates = new();
-    private static readonly Dictionary<string, string> _playerRooms = new();
-    private static readonly List<string> _waitingPlayers = new();
+    private static readonly ConcurrentDictionary<string, GameStateMachine> _playerStates = new();
+    private static readonly ConcurrentDictionary<string, string> _playerRooms = new();
+    private static readonly ConcurrentDictionary<string, byte> _waitingPlayers = new();
     private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new(); // Track game state per room
 
     public async Task EnterLobby(string playerName, string avatar)
@@ -73,13 +103,14 @@ public class GameHub : Hub<IGameClient>
         stateMachine.TransitionTo(GameState.Matchmaking);
 
         // Check for waiting players
-        var opponent = _waitingPlayers.FirstOrDefault(p => p != playerId);
+        var opponent = _waitingPlayers.Keys.FirstOrDefault(p => p != playerId);
         
         if (opponent != null)
         {
             // Match found!
-            _waitingPlayers.Remove(opponent);
-            _waitingPlayers.Remove(playerId);
+            // Remove both players from waiting list
+            _waitingPlayers.TryRemove(playerId, out _);
+            _waitingPlayers.TryRemove(opponent, out _);
 
             var roomId = $"game_{Guid.NewGuid():N}";
             _playerRooms[playerId] = roomId;
@@ -110,7 +141,7 @@ public class GameHub : Hub<IGameClient>
         else
         {
             // Add to waiting list
-            _waitingPlayers.Add(playerId);
+            _waitingPlayers.TryAdd(playerId, 0);
             await Clients.Caller.WaitingForOpponent();
             stateMachine.TransitionTo(GameState.WaitingForOpponent);
         }
@@ -121,6 +152,12 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
+        // Cancel any previous round operations
+        gameState.RoundCts?.Cancel();
+        gameState.RoundCts?.Dispose();
+        gameState.RoundCts = new CancellationTokenSource();
+        var ct = gameState.RoundCts.Token;
+
         gameState.CurrentRound = round;
         
         // Generate round data using MemoryColorsGame
@@ -130,17 +167,27 @@ public class GameHub : Hub<IGameClient>
         // Notify players that round is starting
         await Clients.Group(roomId).RoundStarting(round, 3);
         
-        // Show colors phase
-        await Clients.Group(roomId).ShowColors(roundData, 2000); // Show for 2 seconds
-        
-        // After showing colors, start input phase
-        // TODO: move to background service to avoid holding SignalR context
-        await Task.Delay(2000);
-        await Clients.Group(roomId).HideColors();
-        await Clients.Group(roomId).RoundInputPhase();
-        
-        // Reset player answers for this round
-        gameState.PlayerRoundAnswers.Clear();
+        try
+        {
+            // Show colors phase
+            await Clients.Group(roomId).ShowColors(roundData, 2000); // Show for 2 seconds
+            
+            // After showing colors, start input phase
+            await Task.Delay(2000, ct);
+            
+            if (ct.IsCancellationRequested) return;
+            
+            await Clients.Group(roomId).HideColors();
+            await Clients.Group(roomId).RoundInputPhase();
+            
+            // Reset player answers for this round
+            gameState.ClearAnswers();
+        }
+        catch (OperationCanceledException)
+        {
+            // Round was cancelled (e.g., player disconnected)
+            return;
+        }
     }
 
     public async Task SubmitAnswer(string[] colors, int timeMs)
@@ -153,12 +200,14 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        // Store player's answer
-        gameState.PlayerRoundAnswers[playerId] = (timeMs, colors);
+        // Store player's answer (thread-safe)
+        gameState.TryAddAnswer(playerId, (timeMs, colors));
 
-        // Check if both players have submitted answers
-        if (gameState.PlayerRoundAnswers.Count >= 2 || 
-            (_playerRooms.Values.Count(id => id == roomId) == 1)) // Solo mode
+        // Check if both players have submitted answers (thread-safe)
+        var answerCount = gameState.GetAnswerCount();
+        var playersInRoom = _playerRooms.Count(kvp => kvp.Value == roomId);
+        
+        if (answerCount >= 2 || playersInRoom == 1) // Solo mode
         {
             await ProcessRoundResults(roomId);
         }
@@ -228,17 +277,24 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        // Determine winner based on total scores
+        // Determine winner based on total scores (handle ties properly)
         var playerIds = gameState.PlayerScores.Keys.ToList();
         string winnerId = "";
         int winnerScore = -1;
+        bool isTie = false;
         
         foreach (var playerId in playerIds)
         {
-            if (gameState.PlayerScores[playerId] > winnerScore)
+            var score = gameState.PlayerScores[playerId];
+            if (score > winnerScore)
             {
-                winnerScore = gameState.PlayerScores[playerId];
+                winnerScore = score;
                 winnerId = playerId;
+                isTie = false;
+            }
+            else if (score == winnerScore)
+            {
+                isTie = true; // It's a tie
             }
         }
 
@@ -249,7 +305,8 @@ public class GameHub : Hub<IGameClient>
             finalResults[playerId] = new
             {
                 TotalScore = gameState.PlayerScores[playerId],
-                IsWinner = playerId == winnerId
+                IsWinner = !isTie && playerId == winnerId,
+                IsTie = isTie
             };
         }
 
@@ -257,12 +314,17 @@ public class GameHub : Hub<IGameClient>
         await Clients.Group(roomId).MatchOver(new
         {
             Results = finalResults,
-            Winner = winnerId,
-            WinnerScore = winnerScore
+            Winner = isTie ? "" : winnerId, // Empty if tie
+            WinnerScore = winnerScore,
+            IsTie = isTie
         });
 
+        // Cancel any ongoing round operations
+        gameState.RoundCts?.Cancel();
+        gameState.RoundCts?.Dispose();
+
         // Clean up game state
-        _roomGameStates.Remove(roomId);
+        _roomGameStates.TryRemove(roomId, out _);
         
         // Update player states
         foreach (var playerId in playerIds)
@@ -307,22 +369,25 @@ public class GameHub : Hub<IGameClient>
     {
         var playerId = Context.ConnectionId;
         
-        // Remove from waiting list if present
-        _waitingPlayers.Remove(playerId);
+        _waitingPlayers.TryRemove(playerId, out _);
         
         // Clean up state
-        _playerStates.Remove(playerId);
+        _playerStates.TryRemove(playerId, out _);
         
         // Remove from groups
         if (_playerRooms.TryGetValue(playerId, out var roomId))
         {
             await Groups.RemoveFromGroupAsync(playerId, roomId);
-            _playerRooms.Remove(playerId);
+            _playerRooms.TryRemove(playerId, out _);
             
             // If this was the last player in the room, clean up game state
-            if (!_playerRooms.ContainsValue(roomId))
+            if (!_playerRooms.Values.Contains(roomId))
             {
-                _roomGameStates.Remove(roomId);
+                if (_roomGameStates.TryGetValue(roomId, out var gameState))
+                {
+                    gameState.RoundCts?.Cancel();
+                }
+                _roomGameStates.TryRemove(roomId, out _);
             }
         }
         
@@ -338,14 +403,14 @@ public class GameHub : Hub<IGameClient>
         {
             await Clients.OthersInGroup(roomId).OpponentDisconnected();
             
-            // Clean up room if needed
-            _playerRooms.Remove(playerId);
-            if (!_playerRooms.ContainsValue(roomId))
+            // Cancel ongoing round operations before cleanup
+            if (_roomGameStates.TryGetValue(roomId, out var gameState))
             {
-                _roomGameStates.Remove(roomId);
+                gameState.RoundCts?.Cancel();
             }
         }
 
+        // LeaveLobby handles the cleanup (no double remove here)
         await LeaveLobby();
         
         await base.OnDisconnectedAsync(exception);
