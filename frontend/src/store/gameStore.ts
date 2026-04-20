@@ -65,8 +65,9 @@ export const getSignalRConnection = () => connection;
 export const initializeSignalR = async () => {
   if (connection) return connection;
   
+  const signalRUrl = process.env.NEXT_PUBLIC_SIGNALR_URL || 'http://localhost:5000/hubs/game';
   connection = new signalR.HubConnectionBuilder()
-    .withUrl('http://localhost:5000/hubs/game')
+    .withUrl(signalRUrl)
     .withAutomaticReconnect()
     .build();
   
