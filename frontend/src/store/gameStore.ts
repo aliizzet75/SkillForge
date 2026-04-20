@@ -210,10 +210,10 @@ export const playRandom = async () => {
   }
 };
 
-export const submitAnswer = async (colors: string[], timeMs: number) => {
+export const submitAnswer = async (colors: string[]) => {
   const conn = getSignalRConnection();
   if (conn) {
-    await conn.invoke('SubmitAnswer', colors, timeMs);
+    await conn.invoke('SubmitAnswer', colors);
   }
 };
 
