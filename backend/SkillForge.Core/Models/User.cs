@@ -11,11 +11,17 @@ public class User
     [MaxLength(50)]
     public string Username { get; set; } = string.Empty;
     
+    [MaxLength(100)]
+    public string? DisplayName { get; set; }
+    
     [MaxLength(255)]
     public string? Email { get; set; }
     
     [MaxLength(255)]
     public string? PasswordHash { get; set; }
+    
+    [MaxLength(255)]
+    public string? Avatar { get; set; }
     
     [MaxLength(20)]
     public string? SocialProvider { get; set; } // "google", "facebook", "github", etc.
@@ -29,7 +35,13 @@ public class User
     [MaxLength(50)]
     public string? Timezone { get; set; }
     
+    public int TotalXp { get; set; } = 0;
+    
+    public int CurrentLevel { get; set; } = 1;
+    
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     
     public DateTime? LastSeenAt { get; set; }
     
