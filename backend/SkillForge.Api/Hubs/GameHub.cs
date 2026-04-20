@@ -55,13 +55,21 @@ public class RoomGameState
             return PlayerRoundAnswers.Count;
         }
     }
+    
+    public void ClearAnswers()
+    {
+        lock (_lock)
+        {
+            PlayerRoundAnswers.Clear();
+        }
+    }
 }
 
 public class GameHub : Hub<IGameClient>
 {
     private static readonly ConcurrentDictionary<string, GameStateMachine> _playerStates = new();
     private static readonly ConcurrentDictionary<string, string> _playerRooms = new();
-    private static readonly ConcurrentBag<string> _waitingPlayers = new();
+    private static readonly ConcurrentDictionary<string, byte> _waitingPlayers = new();
     private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new(); // Track game state per room
 
     public async Task EnterLobby(string playerName, string avatar)
@@ -95,13 +103,14 @@ public class GameHub : Hub<IGameClient>
         stateMachine.TransitionTo(GameState.Matchmaking);
 
         // Check for waiting players
-        var opponent = _waitingPlayers.FirstOrDefault(p => p != playerId);
+        var opponent = _waitingPlayers.Keys.FirstOrDefault(p => p != playerId);
         
         if (opponent != null)
         {
             // Match found!
-            _waitingPlayers.TryTake(out _);
-            _waitingPlayers.TryTake(out _);
+            // Remove both players from waiting list
+            _waitingPlayers.TryRemove(playerId, out _);
+            _waitingPlayers.TryRemove(opponent, out _);
 
             var roomId = $"game_{Guid.NewGuid():N}";
             _playerRooms[playerId] = roomId;
@@ -132,7 +141,7 @@ public class GameHub : Hub<IGameClient>
         else
         {
             // Add to waiting list
-            _waitingPlayers.Add(playerId);
+            _waitingPlayers.TryAdd(playerId, 0);
             await Clients.Caller.WaitingForOpponent();
             stateMachine.TransitionTo(GameState.WaitingForOpponent);
         }
@@ -145,6 +154,7 @@ public class GameHub : Hub<IGameClient>
 
         // Cancel any previous round operations
         gameState.RoundCts?.Cancel();
+        gameState.RoundCts?.Dispose();
         gameState.RoundCts = new CancellationTokenSource();
         var ct = gameState.RoundCts.Token;
 
@@ -171,10 +181,7 @@ public class GameHub : Hub<IGameClient>
             await Clients.Group(roomId).RoundInputPhase();
             
             // Reset player answers for this round
-            lock (gameState)
-            {
-                gameState.PlayerRoundAnswers.Clear();
-            }
+            gameState.ClearAnswers();
         }
         catch (OperationCanceledException)
         {
@@ -314,6 +321,7 @@ public class GameHub : Hub<IGameClient>
 
         // Cancel any ongoing round operations
         gameState.RoundCts?.Cancel();
+        gameState.RoundCts?.Dispose();
 
         // Clean up game state
         _roomGameStates.TryRemove(roomId, out _);
@@ -361,8 +369,7 @@ public class GameHub : Hub<IGameClient>
     {
         var playerId = Context.ConnectionId;
         
-        // Remove from waiting list if present (ConcurrentBag doesn't support direct remove, skip for now)
-        // TODO: Implement proper waiting list with ConcurrentDictionary if needed
+        _waitingPlayers.TryRemove(playerId, out _);
         
         // Clean up state
         _playerStates.TryRemove(playerId, out _);
