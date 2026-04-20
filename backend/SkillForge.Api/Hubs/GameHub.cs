@@ -280,43 +280,56 @@ public class GameHub : Hub<IGameClient>
 
         // Determine winner based on total scores (handle ties properly)
         var playerIds = gameState.PlayerScores.Keys.ToList();
-        string winnerId = "";
-        int winnerScore = -1;
-        bool isTie = false;
+        string player1Id = "";
+        string player2Id = "";
         
-        foreach (var playerId in playerIds)
+        // Find the actual player connection IDs
+        foreach (var kvp in gameState.PlayerConnectionIds)
         {
-            var score = gameState.PlayerScores[playerId];
-            if (score > winnerScore)
-            {
-                winnerScore = score;
-                winnerId = playerId;
-                isTie = false;
-            }
-            else if (score == winnerScore)
-            {
-                isTie = true; // It's a tie
-            }
+            if (kvp.Value == "Player1")
+                player1Id = kvp.Key;
+            else if (kvp.Value == "Player2")
+                player2Id = kvp.Key;
+        }
+        
+        // Get scores for both players
+        int player1Score = player1Id != "" && gameState.PlayerScores.ContainsKey(player1Id) ? gameState.PlayerScores[player1Id] : 0;
+        int player2Score = player2Id != "" && gameState.PlayerScores.ContainsKey(player2Id) ? gameState.PlayerScores[player2Id] : 0;
+        
+        // Determine winner
+        string winner = "";
+        bool isTie = player1Score == player2Score;
+        
+        if (!isTie)
+        {
+            winner = player1Score > player2Score ? "Player1" : "Player2";
         }
 
-        // Prepare final results
+        // Prepare final results with proper player identification
         var finalResults = new Dictionary<string, object>();
-        foreach (var playerId in playerIds)
+        
+        // Add both players to results with their scores
+        finalResults["Player1"] = new
         {
-            finalResults[playerId] = new
-            {
-                TotalScore = gameState.PlayerScores[playerId],
-                IsWinner = !isTie && playerId == winnerId,
-                IsTie = isTie
-            };
-        }
+            TotalScore = player1Score,
+            IsWinner = !isTie && winner == "Player1",
+            IsTie = isTie
+        };
+        
+        finalResults["Player2"] = new
+        {
+            TotalScore = player2Score,
+            IsWinner = !isTie && winner == "Player2",
+            IsTie = isTie
+        };
 
-        // Send match over event
+        // Send match over event with clear winner information
         await Clients.Group(roomId).MatchOver(new
         {
             Results = finalResults,
-            Winner = isTie ? "" : winnerId, // Empty if tie
-            WinnerScore = winnerScore,
+            Winner = isTie ? "Tie" : winner,
+            Player1Score = player1Score,
+            Player2Score = player2Score,
             IsTie = isTie
         });
 
