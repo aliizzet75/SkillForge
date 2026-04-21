@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Core.Models;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace SkillForge.Api.Controllers;
@@ -103,7 +104,18 @@ public class AuthController : ControllerBase
 
     private bool VerifyPassword(string password, string hash)
     {
-        return BCrypt.Net.BCrypt.Verify(password, hash);
+        // Migration: supports both BCrypt (new) and SHA256 (legacy) hashes
+        if (hash.StartsWith("$2"))
+        {
+            return BCrypt.Net.BCrypt.Verify(password, hash);
+        }
+        else
+        {
+            // Legacy SHA256 fallback for existing users
+            using var sha256 = SHA256.Create();
+            var bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
+            return Convert.ToBase64String(bytes) == hash;
+        }
     }
 }
 
