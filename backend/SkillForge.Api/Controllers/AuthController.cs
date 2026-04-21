@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Core.Models;
+using SkillForge.Core.Services;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -12,10 +13,12 @@ namespace SkillForge.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly SkillForgeDbContext _context;
+    private readonly IJwtService _jwtService;
 
-    public AuthController(SkillForgeDbContext context)
+    public AuthController(SkillForgeDbContext context, IJwtService jwtService)
     {
         _context = context;
+        _jwtService = jwtService;
     }
 
     [HttpPost("register")]
@@ -81,19 +84,25 @@ public class AuthController : ControllerBase
         user.LastSeenAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
+        var token = _jwtService.GenerateJwtToken(user);
+        
         return Ok(new
         {
-            id = user.Id,
-            username = user.Username,
-            email = user.Email,
-            countryCode = user.CountryCode,
-            skills = user.Skills.Select(s => new
+            token = token,
+            user = new
             {
-                type = s.SkillType,
-                level = s.Level,
-                xp = s.XP,
-                percentile = s.Percentile
-            })
+                id = user.Id,
+                username = user.Username,
+                email = user.Email,
+                countryCode = user.CountryCode,
+                skills = user.Skills.Select(s => new
+                {
+                    type = s.SkillType,
+                    level = s.Level,
+                    xp = s.XP,
+                    percentile = s.Percentile
+                })
+            }
         });
     }
 
