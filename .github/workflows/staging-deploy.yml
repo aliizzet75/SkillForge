@@ -26,6 +26,9 @@ jobs:
 
       - name: Build Frontend
         working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://187.124.28.216:5001
+          NEXT_PUBLIC_SIGNALR_URL: http://187.124.28.216:5001/hubs/game
         run: |
           npm install
           npm run build
