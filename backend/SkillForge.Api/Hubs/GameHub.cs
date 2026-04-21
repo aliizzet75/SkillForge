@@ -22,6 +22,7 @@ public interface IGameClient
     Task OpponentDisconnected();
     Task SoloModeActivated();
     Task WaitingForOpponent();
+    Task PlayerAssigned(string label);
 }
 
 // Game state tracking for each room
@@ -125,7 +126,11 @@ public class GameHub : Hub<IGameClient>
             await Groups.AddToGroupAsync(playerId, roomId);
             await Groups.AddToGroupAsync(opponent, roomId);
 
-            // Notify both players
+            // Notify both players of their assigned labels
+            await Clients.Client(playerId).PlayerAssigned("Player1");
+            await Clients.Client(opponent).PlayerAssigned("Player2");
+            
+            // Notify both players about match
             await Clients.Client(playerId).MatchFound("Opponent", "🧙‍♂️", 1, 1, 3);
             await Clients.Client(opponent).MatchFound("Opponent", "🧙‍♀️", 1, 1, 3);
 
@@ -261,12 +266,43 @@ public class GameHub : Hub<IGameClient>
             };
         }
 
-        // Send round results to all players in room
-        await Clients.Group(roomId).RoundResult(new
+        // Send individualized round results to each player with correct opponent score
+        foreach (var playerId in gameState.PlayerRoundAnswers.Keys)
         {
-            Round = gameState.CurrentRound,
-            Results = roundResults
-        });
+            // Find the opponent player ID
+            string opponentPlayerId = "";
+            foreach (var kvp in gameState.PlayerRoundAnswers)
+            {
+                if (kvp.Key != playerId)
+                {
+                    opponentPlayerId = kvp.Key;
+                    break;
+                }
+            }
+            
+            // Get opponent's score if available
+            int opponentScore = 0;
+            if (!string.IsNullOrEmpty(opponentPlayerId) && roundResults.ContainsKey(opponentPlayerId))
+            {
+                var opponentResult = roundResults[opponentPlayerId];
+                // Extract score from anonymous object - using reflection
+                var opponentResultDict = opponentResult.GetType().GetProperties()
+                    .ToDictionary(p => p.Name, p => p.GetValue(opponentResult));
+                if (opponentResultDict.ContainsKey("Score"))
+                {
+                    opponentScore = Convert.ToInt32(opponentResultDict["Score"]);
+                }
+            }
+            
+            // Send personalized result to each player
+            await Clients.Client(playerId).RoundResult(new
+            {
+                Round = gameState.CurrentRound,
+                YourScore = roundResults.ContainsKey(playerId) ? ((dynamic)roundResults[playerId]).Score : 0,
+                OpponentScore = opponentScore,
+                Results = roundResults
+            });
+        }
 
         // Check if game is over (3 rounds completed)
         if (gameState.CurrentRound >= 3)
@@ -377,11 +413,31 @@ public class GameHub : Hub<IGameClient>
             // Notify opponent
             await Clients.OthersInGroup(roomId).OpponentFinished("You");
             
-            // Send round result
+            // Send round result with proper opponent score lookup
+            int opponentScore = 0;
+            if (_roomGameStates.TryGetValue(roomId, out var gameState))
+            {
+                // Find opponent and get their score
+                string opponentId = "";
+                foreach (var kvp in gameState.PlayerConnectionIds)
+                {
+                    if (kvp.Key != playerId)
+                    {
+                        opponentId = kvp.Key;
+                        break;
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(opponentId) && gameState.PlayerScores.ContainsKey(opponentId))
+                {
+                    opponentScore = gameState.PlayerScores[opponentId];
+                }
+            }
+            
             await Clients.Group(roomId).RoundResult(new
             {
                 YourScore = score,
-                OpponentScore = 0, // Would be calculated from actual game
+                OpponentScore = opponentScore,
                 Winner = playerId
             });
         }

@@ -24,8 +24,8 @@ public class JwtService : IJwtService
     public string GenerateJwtToken(User user)
     {
         var jwtSettings = _configuration.GetSection("Jwt");
-        // Use environment variable as fallback for JWT key, with hardcoded value as last resort
-        var keyString = Environment.GetEnvironmentVariable("JWT__KEY") ?? jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is missing");
+        // Use environment variable as primary source for JWT key, fallback to configuration
+        var keyString = Environment.GetEnvironmentVariable("JWT_KEY") ?? jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is missing");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

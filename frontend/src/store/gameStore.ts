@@ -33,6 +33,8 @@ interface GameState {
   isInputPhase: boolean;
   roundResults: any | null;
   matchResults: any | null;
+  myPlayerLabel: string | null; // New field for player label
+  opponentDisconnected: boolean; // New field for opponent disconnection
   
   // Actions
   setUser: (user: User | null) => void;
@@ -46,6 +48,8 @@ interface GameState {
   setInputPhase: (isInput: boolean) => void;
   setRoundResults: (results: any) => void;
   setMatchResults: (results: any) => void;
+  setMyPlayerLabel: (label: string | null) => void; // New action
+  setOpponentDisconnected: (disconnected: boolean) => void; // New action
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -60,6 +64,8 @@ export const useGameStore = create<GameState>((set) => ({
   isInputPhase: false,
   roundResults: null,
   matchResults: null,
+  myPlayerLabel: null,
+  opponentDisconnected: false,
   
   setUser: (user) => set({ user }),
   setConnected: (isConnected) => set({ isConnected }),
@@ -72,6 +78,8 @@ export const useGameStore = create<GameState>((set) => ({
   setInputPhase: (isInputPhase) => set({ isInputPhase }),
   setRoundResults: (roundResults) => set({ roundResults }),
   setMatchResults: (matchResults) => set({ matchResults }),
+  setMyPlayerLabel: (myPlayerLabel) => set({ myPlayerLabel }),
+  setOpponentDisconnected: (opponentDisconnected) => set({ opponentDisconnected }),
 }));
 
 // SignalR Connection
@@ -165,6 +173,7 @@ export const initializeSignalR = async () => {
   
   connection.on('OpponentDisconnected', () => {
     console.log('Opponent disconnected');
+    useGameStore.getState().setOpponentDisconnected(true);
   });
   
   connection.on('SoloModeActivated', () => {
@@ -173,6 +182,11 @@ export const initializeSignalR = async () => {
   
   connection.on('WaitingForOpponent', () => {
     useGameStore.getState().setMatchmaking(true);
+  });
+  
+  connection.on('PlayerAssigned', (label: string) => {
+    console.log('Player assigned as:', label);
+    useGameStore.getState().setMyPlayerLabel(label);
   });
   
   try {

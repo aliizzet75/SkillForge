@@ -20,10 +20,12 @@ export default function Home() {
     isInputPhase,
     roundResults,
     matchResults,
+    opponentDisconnected,
     setUser,
     setInLobby,
     setMatchmaking,
     setSelectedColors: setStoreSelectedColors,
+    setOpponentDisconnected,
   } = useGameStore();
 
   // Initialize SignalR on mount
@@ -70,6 +72,33 @@ export default function Home() {
     });
     setSelectedColors([]);
   };
+
+  // Opponent Disconnected Screen
+  if (opponentDisconnected) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 text-center">
+          <h1 className="text-3xl font-bold text-white mb-6">⚠️ Spiel unterbrochen</h1>
+          
+          <div className="text-6xl mb-4">🔌</div>
+          
+          <p className="text-xl font-bold text-white mb-6">
+            Dein Gegner hat das Spiel verlassen
+          </p>
+          
+          <button
+            onClick={() => {
+              leaveLobby();
+              setOpponentDisconnected(false);
+            }}
+            className="w-full py-4 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl transition-all"
+          >
+            Zurück zur Lobby
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Lobby Screen
   if (isInLobby && !isInGame) {
@@ -126,9 +155,9 @@ export default function Home() {
 
   // Match Over Screen
   if (matchResults && isInGame) {
-    const { Results, Player1Score, Player2Score, WinnerConnectionId, IsTie } = matchResults;
-    const myConnectionId = useGameStore.getState().user?.id || '';
-    const isWinner = WinnerConnectionId === myConnectionId;
+    const { Results, Player1Score, Player2Score, Winner, IsTie } = matchResults;
+    const myPlayerLabel = useGameStore.getState().myPlayerLabel || '';
+    const isWinner = Winner === myPlayerLabel;
     
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4">
