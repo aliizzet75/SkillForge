@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Core.Models;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace SkillForge.Api.Controllers;
@@ -99,14 +98,12 @@ public class AuthController : ControllerBase
 
     private string HashPassword(string password)
     {
-        using var sha256 = SHA256.Create();
-        var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-        return Convert.ToBase64String(bytes);
+        return BCrypt.Net.BCrypt.HashPassword(password);
     }
 
     private bool VerifyPassword(string password, string hash)
     {
-        return HashPassword(password) == hash;
+        return BCrypt.Net.BCrypt.Verify(password, hash);
     }
 }
 
