@@ -99,14 +99,23 @@ public class AuthController : ControllerBase
 
     private string HashPassword(string password)
     {
-        using var sha256 = SHA256.Create();
-        var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-        return Convert.ToBase64String(bytes);
+        return BCrypt.Net.BCrypt.HashPassword(password);
     }
 
     private bool VerifyPassword(string password, string hash)
     {
-        return HashPassword(password) == hash;
+        // Migration: supports both BCrypt (new) and SHA256 (legacy) hashes
+        if (hash.StartsWith("$2"))
+        {
+            return BCrypt.Net.BCrypt.Verify(password, hash);
+        }
+        else
+        {
+            // Legacy SHA256 fallback for existing users
+            using var sha256 = SHA256.Create();
+            var bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
+            return Convert.ToBase64String(bytes) == hash;
+        }
     }
 }
 
