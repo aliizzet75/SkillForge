@@ -1,24 +1,25 @@
 # SkillForge Meilensteine
 
-## M1: Erstes spielbares PvP-Spiel 🎮
+## M1: Erstes spielbares PvP-Spiel 🎮 ✅ FERTIG
 
 **Ziel:** Zwei Spieler können sich matchen und 3 Runden Memory-Farben spielen
 
 | Task | Beschreibung | Status |
 |-------|------------------------------------------------------------------|---------|
 | ✅ T1.1 | GameHub: vollständiger 3-Runden-Loop mit MatchOver | Gemerged |
+| ✅ T1.2 | GameHub: MemoryColorsGame.GenerateData() pro Runde | Gemerged |
 | ✅ T1.3 | GameHub: Score-Tracking beider Spieler, Gewinner-Ermittlung | Gemerged |
 | ✅ T1.4 | Frontend: ShowColors-Phase automatisch triggern | Gemerged |
 | ✅ T1.5 | Frontend: SignalR-URL konfigurierbar (env variable) | Gemerged |
-| 🔄 T1.6 | Program.cs: CORS für Frontend freigeben | PR #12 offen |
-| ⏳ T1.2 | GameHub: MemoryColorsGame.GenerateData() pro Runde (kein Hardcode) | Offen |
-| ⏳ T1.7 | Server-side Answer Validation (kein Client-Trust) | Offen |
+| ✅ T1.6 | Program.cs: CORS für Frontend freigeben | Gemerged |
+| ✅ T1.7 | Server-side Answer Validation | Gemerged |
+| ✅ T1.8 | Backend: Bind to 0.0.0.0 für externe Verbindungen | Gemerged |
 
-**Definition of Done:** Zwei Browser-Tabs können gegeneinander spielen, Sieger wird angezeigt.
+**Definition of Done:** Zwei Browser-Tabs können gegeneinander spielen, Sieger wird angezeigt. ✅
 
 ---
 
-## M2: Auth + persistente Profile 🔐
+## M2: Auth + persistente Profile 🔐 ⏳ AKTIV
 
 **Ziel:** Spieler registrieren sich, loggen ein, XP wird gespeichert
 
@@ -80,6 +81,6 @@
 
 ---
 
-**Strategie:** Sequenziell — M1 vollständig abschließen vor M2.
+**Aktueller Fokus:** M2 — Auth & persistente Profile
 
-_Quelle: Gespräch mit Ali am 2026-04-20_
+_Updated: 2026-04-21_

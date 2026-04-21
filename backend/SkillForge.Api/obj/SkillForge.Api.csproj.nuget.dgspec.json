@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "/workspace/projects/skillforge/backend/SkillForge.Api/SkillForge.Api.csproj": {}
+    "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Api/SkillForge.Api.csproj": {}
   },
   "projects": {
-    "/workspace/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj": {
+    "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/workspace/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj",
+        "projectUniqueName": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj",
         "projectName": "SkillForge.AI",
-        "projectPath": "/workspace/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj",
+        "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj",
         "packagesPath": "/data/.nuget/packages/",
-        "outputPath": "/workspace/projects/skillforge/backend/SkillForge.AI/obj/",
+        "outputPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.AI/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/data/.nuget/NuGet/NuGet.Config"
@@ -20,14 +20,15 @@
           "net10.0"
         ],
         "sources": {
+          "/home/linuxbrew/.linuxbrew/Cellar/dotnet/10.0.106/libexec/library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj": {
-                "projectPath": "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj"
+              "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj": {
+                "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj"
               }
             }
           }
@@ -42,7 +43,7 @@
           "auditLevel": "low",
           "auditMode": "all"
         },
-        "SdkAnalysisLevel": "10.0.200"
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net10.0": {
@@ -73,7 +74,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/data/.dotnet/sdk/10.0.201/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/home/linuxbrew/.linuxbrew/Cellar/dotnet/10.0.106/libexec/sdk/10.0.106/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.CSharp": "(,4.7.32767]",
             "Microsoft.VisualBasic": "(,10.4.32767]",
@@ -351,14 +352,14 @@
         }
       }
     },
-    "/workspace/projects/skillforge/backend/SkillForge.Api/SkillForge.Api.csproj": {
+    "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Api/SkillForge.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/workspace/projects/skillforge/backend/SkillForge.Api/SkillForge.Api.csproj",
+        "projectUniqueName": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Api/SkillForge.Api.csproj",
         "projectName": "SkillForge.Api",
-        "projectPath": "/workspace/projects/skillforge/backend/SkillForge.Api/SkillForge.Api.csproj",
+        "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Api/SkillForge.Api.csproj",
         "packagesPath": "/data/.nuget/packages/",
-        "outputPath": "/workspace/projects/skillforge/backend/SkillForge.Api/obj/",
+        "outputPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Api/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/data/.nuget/NuGet/NuGet.Config"
@@ -367,20 +368,21 @@
           "net10.0"
         ],
         "sources": {
+          "/home/linuxbrew/.linuxbrew/Cellar/dotnet/10.0.106/libexec/library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "/workspace/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj": {
-                "projectPath": "/workspace/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj"
+              "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj": {
+                "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.AI/SkillForge.AI.csproj"
               },
-              "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj": {
-                "projectPath": "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj"
+              "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj": {
+                "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj"
               },
-              "/workspace/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj": {
-                "projectPath": "/workspace/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj"
+              "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj": {
+                "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj"
               }
             }
           }
@@ -395,12 +397,24 @@
           "auditLevel": "low",
           "auditMode": "all"
         },
-        "SdkAnalysisLevel": "10.0.200"
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net10.0": {
           "targetAlias": "net10.0",
           "dependencies": {
+            "BCrypt.Net-Next": {
+              "target": "Package",
+              "version": "[4.0.3, )"
+            },
+            "Microsoft.AspNetCore.Authentication.Facebook": {
+              "target": "Package",
+              "version": "[10.0.6, )"
+            },
+            "Microsoft.AspNetCore.Authentication.Google": {
+              "target": "Package",
+              "version": "[10.0.6, )"
+            },
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
               "version": "[10.0.6, )"
@@ -411,6 +425,10 @@
               "target": "Package",
               "version": "[10.0.6, )"
             },
+            "Microsoft.IdentityModel.Tokens": {
+              "target": "Package",
+              "version": "[8.3.1, )"
+            },
             "Npgsql.EntityFrameworkCore.PostgreSQL": {
               "target": "Package",
               "version": "[10.0.1, )"
@@ -418,6 +436,10 @@
             "Swashbuckle.AspNetCore": {
               "target": "Package",
               "version": "[10.1.7, )"
+            },
+            "System.IdentityModel.Tokens.Jwt": {
+              "target": "Package",
+              "version": "[8.3.1, )"
             }
           },
           "imports": [
@@ -439,7 +461,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/data/.dotnet/sdk/10.0.201/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/home/linuxbrew/.linuxbrew/Cellar/dotnet/10.0.106/libexec/sdk/10.0.106/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.AspNetCore": "(,10.0.32767]",
             "Microsoft.AspNetCore.Antiforgery": "(,10.0.32767]",
@@ -857,14 +879,14 @@
         }
       }
     },
-    "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj": {
+    "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj",
+        "projectUniqueName": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj",
         "projectName": "SkillForge.Core",
-        "projectPath": "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj",
+        "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj",
         "packagesPath": "/data/.nuget/packages/",
-        "outputPath": "/workspace/projects/skillforge/backend/SkillForge.Core/obj/",
+        "outputPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/data/.nuget/NuGet/NuGet.Config"
@@ -873,6 +895,7 @@
           "net10.0"
         ],
         "sources": {
+          "/home/linuxbrew/.linuxbrew/Cellar/dotnet/10.0.106/libexec/library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -891,7 +914,7 @@
           "auditLevel": "low",
           "auditMode": "all"
         },
-        "SdkAnalysisLevel": "10.0.200"
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net10.0": {
@@ -907,9 +930,17 @@
               "target": "Package",
               "version": "[10.0.6, )"
             },
+            "Microsoft.IdentityModel.Tokens": {
+              "target": "Package",
+              "version": "[8.3.1, )"
+            },
             "Npgsql.EntityFrameworkCore.PostgreSQL": {
               "target": "Package",
               "version": "[10.0.1, )"
+            },
+            "System.IdentityModel.Tokens.Jwt": {
+              "target": "Package",
+              "version": "[8.3.1, )"
             }
           },
           "imports": [
@@ -928,7 +959,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/data/.dotnet/sdk/10.0.201/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/home/linuxbrew/.linuxbrew/Cellar/dotnet/10.0.106/libexec/sdk/10.0.106/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.CSharp": "(,4.7.32767]",
             "Microsoft.VisualBasic": "(,10.4.32767]",
@@ -1206,14 +1237,14 @@
         }
       }
     },
-    "/workspace/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj": {
+    "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/workspace/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj",
+        "projectUniqueName": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj",
         "projectName": "SkillForge.Games",
-        "projectPath": "/workspace/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj",
+        "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Games/SkillForge.Games.csproj",
         "packagesPath": "/data/.nuget/packages/",
-        "outputPath": "/workspace/projects/skillforge/backend/SkillForge.Games/obj/",
+        "outputPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Games/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/data/.nuget/NuGet/NuGet.Config"
@@ -1222,14 +1253,15 @@
           "net10.0"
         ],
         "sources": {
+          "/home/linuxbrew/.linuxbrew/Cellar/dotnet/10.0.106/libexec/library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
           "net10.0": {
             "targetAlias": "net10.0",
             "projectReferences": {
-              "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj": {
-                "projectPath": "/workspace/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj"
+              "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj": {
+                "projectPath": "/data/.openclaw/workspace-codex/projects/skillforge/backend/SkillForge.Core/SkillForge.Core.csproj"
               }
             }
           }
@@ -1244,7 +1276,7 @@
           "auditLevel": "low",
           "auditMode": "all"
         },
-        "SdkAnalysisLevel": "10.0.200"
+        "SdkAnalysisLevel": "10.0.100"
       },
       "frameworks": {
         "net10.0": {
@@ -1275,7 +1307,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/data/.dotnet/sdk/10.0.201/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/home/linuxbrew/.linuxbrew/Cellar/dotnet/10.0.106/libexec/sdk/10.0.106/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.CSharp": "(,4.7.32767]",
             "Microsoft.VisualBasic": "(,10.4.32767]",
