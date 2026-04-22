@@ -4,23 +4,29 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FcGoogle } from 'react-icons/fc';
 import { FaFacebook, FaUserSecret } from 'react-icons/fa';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import LoginForm from '@/components/auth/LoginForm';
 
 function LoginPageContent() {
   const router = useRouter();
-  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`;
+    try {
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`;
+    } catch {
+      setIsLoading(false);
+    }
   };
 
   const handleFacebookLogin = async () => {
     setIsLoading(true);
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/facebook`;
+    try {
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/facebook`;
+    } catch {
+      setIsLoading(false);
+    }
   };
 
   const handleGuestLogin = async () => {
@@ -30,7 +36,7 @@ function LoginPageContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('token', data.token);
@@ -138,9 +144,5 @@ function LoginPageContent() {
 }
 
 export default function LoginPage() {
-  return (
-    <AuthProvider>
-      <LoginPageContent />
-    </AuthProvider>
-  );
+  return <LoginPageContent />;
 }
