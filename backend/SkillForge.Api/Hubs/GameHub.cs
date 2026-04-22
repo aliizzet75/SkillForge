@@ -38,7 +38,8 @@ public class RoomGameState
     public int SubmittedAnswersCount => PlayerRoundAnswers.Count;
     public long RoundStartTimeMs { get; set; } = 0; // Timestamp when input phase starts
     private readonly object _lock = new();
-    
+    private bool _roundBeingProcessed = false;
+
     public bool TryAddAnswer(string playerId, (int timeMs, string[] answers) answer)
     {
         lock (_lock)
@@ -49,7 +50,7 @@ public class RoomGameState
             return true;
         }
     }
-    
+
     public int GetAnswerCount()
     {
         lock (_lock)
@@ -57,12 +58,23 @@ public class RoomGameState
             return PlayerRoundAnswers.Count;
         }
     }
-    
+
     public void ClearAnswers()
     {
         lock (_lock)
         {
             PlayerRoundAnswers.Clear();
+            _roundBeingProcessed = false;
+        }
+    }
+
+    public bool TryStartRoundProcessing()
+    {
+        lock (_lock)
+        {
+            if (_roundBeingProcessed) return false;
+            _roundBeingProcessed = true;
+            return true;
         }
     }
 }
@@ -223,7 +235,8 @@ public class GameHub : Hub<IGameClient>
         
         if (answerCount >= 2 || playersInRoom == 1) // Solo mode
         {
-            await ProcessRoundResults(roomId);
+            if (gameState.TryStartRoundProcessing())
+                await ProcessRoundResults(roomId);
         }
         else
         {
@@ -284,14 +297,7 @@ public class GameHub : Hub<IGameClient>
             int opponentScore = 0;
             if (!string.IsNullOrEmpty(opponentPlayerId) && roundResults.ContainsKey(opponentPlayerId))
             {
-                var opponentResult = roundResults[opponentPlayerId];
-                // Extract score from anonymous object - using reflection
-                var opponentResultDict = opponentResult.GetType().GetProperties()
-                    .ToDictionary(p => p.Name, p => p.GetValue(opponentResult));
-                if (opponentResultDict.ContainsKey("Score"))
-                {
-                    opponentScore = Convert.ToInt32(opponentResultDict["Score"]);
-                }
+                opponentScore = (int)((dynamic)roundResults[opponentPlayerId]).Score;
             }
             
             // Send personalized result to each player
@@ -434,7 +440,7 @@ public class GameHub : Hub<IGameClient>
                 }
             }
             
-            await Clients.Group(roomId).RoundResult(new
+            await Clients.Caller.RoundResult(new
             {
                 YourScore = score,
                 OpponentScore = opponentScore,
