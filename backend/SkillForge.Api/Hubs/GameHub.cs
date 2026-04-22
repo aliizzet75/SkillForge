@@ -1,15 +1,12 @@
 using System.Collections.Concurrent;
+using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Core.StateMachine;
 using SkillForge.Core.Models;
 using SkillForge.Games;
-using System.IdentityModel.Tokens.Jwt;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Core.Data;
-using Microsoft.EntityFrameworkCore;
 
 namespace SkillForge.Api.Hubs;
 
@@ -47,13 +44,14 @@ public class RoomGameState
 {
     public int CurrentRound { get; set; } = 1;
     public Dictionary<string, int> PlayerScores { get; set; } = new();
+    public Dictionary<string, int> PlayerPerfectRounds { get; set; } = new();
     public object CurrentRoundData { get; set; } = null!;
     public Dictionary<string, (int timeMs, string[] answers)> PlayerRoundAnswers { get; set; } = new();
     public MemoryColorsGame GameEngine { get; set; } = new();
     public Dictionary<string, string> PlayerConnectionIds { get; set; } = new();
     public CancellationTokenSource RoundCts { get; set; } = new();
     public int SubmittedAnswersCount => PlayerRoundAnswers.Count;
-    public long RoundStartTimeMs { get; set; } = 0; // Timestamp when input phase starts
+    public long RoundStartTimeMs { get; set; } = 0;
     private readonly object _lock = new();
     private bool _roundBeingProcessed = false;
 
@@ -101,42 +99,35 @@ public class GameHub : Hub<IGameClient>
     private static readonly ConcurrentDictionary<string, GameStateMachine> _playerStates = new();
     private static readonly ConcurrentDictionary<string, string> _playerRooms = new();
     private static readonly ConcurrentDictionary<string, byte> _waitingPlayers = new();
-    private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new(); // Track game state per room
-    private static readonly SemaphoreSlim _dbLock = new(1, 1); // Thread safety for database operations
+    private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new();
+    // Maps connectionId → userId so GetUserIdFromConnection can look up any connection, not just the caller
+    private static readonly ConcurrentDictionary<string, string> _connectionUserIds = new();
 
-    private readonly SkillForgeDbContext _dbContext;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public GameHub(SkillForgeDbContext dbContext, IServiceProvider serviceProvider, IHttpContextAccessor httpContextAccessor)
+    public GameHub(IServiceScopeFactory scopeFactory)
     {
-        _dbContext = dbContext;
-        _serviceProvider = serviceProvider;
-        _httpContextAccessor = httpContextAccessor;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task EnterLobby(string playerName, string avatar)
     {
         var playerId = Context.ConnectionId;
-        
-        // Initialize player state
+
         _playerStates[playerId] = new GameStateMachine();
         _playerStates[playerId].OnStateChanged += (oldState, newState) =>
         {
             Console.WriteLine($"Player {playerName}: {oldState} -> {newState}");
         };
 
-        // Add to general lobby group
         await Groups.AddToGroupAsync(playerId, "lobby");
-        
-        // Notify others in lobby
         await Clients.Group("lobby").PlayerJoined(playerName, avatar);
     }
 
     public async Task PlayRandom()
     {
         var playerId = Context.ConnectionId;
-        
+
         if (!_playerStates.TryGetValue(playerId, out var stateMachine))
             return;
 
@@ -145,13 +136,10 @@ public class GameHub : Hub<IGameClient>
 
         stateMachine.TransitionTo(GameState.Matchmaking);
 
-        // Check for waiting players
         var opponent = _waitingPlayers.Keys.FirstOrDefault(p => p != playerId);
-        
+
         if (opponent != null)
         {
-            // Match found!
-            // Remove both players from waiting list
             _waitingPlayers.TryRemove(playerId, out _);
             _waitingPlayers.TryRemove(opponent, out _);
 
@@ -159,7 +147,6 @@ public class GameHub : Hub<IGameClient>
             _playerRooms[playerId] = roomId;
             _playerRooms[opponent] = roomId;
 
-            // Initialize room game state
             _roomGameStates[roomId] = new RoomGameState();
             _roomGameStates[roomId].PlayerConnectionIds[playerId] = "Player1";
             _roomGameStates[roomId].PlayerConnectionIds[opponent] = "Player2";
@@ -167,27 +154,20 @@ public class GameHub : Hub<IGameClient>
             await Groups.AddToGroupAsync(playerId, roomId);
             await Groups.AddToGroupAsync(opponent, roomId);
 
-            // Notify both players of their assigned labels
             await Clients.Client(playerId).PlayerAssigned("Player1");
             await Clients.Client(opponent).PlayerAssigned("Player2");
-            
-            // Notify both players about match
+
             await Clients.Client(playerId).MatchFound("Opponent", "🧙‍♂️", 1, 1, 3);
             await Clients.Client(opponent).MatchFound("Opponent", "🧙‍♀️", 1, 1, 3);
 
-            // Start game for both
             stateMachine.TransitionTo(GameState.GameStarting);
             if (_playerStates.TryGetValue(opponent, out var opponentState))
-            {
                 opponentState.TransitionTo(GameState.GameStarting);
-            }
 
-            // Start round 1
             await StartRound(roomId, 1);
         }
         else
         {
-            // Add to waiting list
             _waitingPlayers.TryAdd(playerId, 0);
             await Clients.Caller.WaitingForOpponent();
             stateMachine.TransitionTo(GameState.WaitingForOpponent);
@@ -199,44 +179,33 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        // Cancel any previous round operations
         gameState.RoundCts?.Cancel();
         gameState.RoundCts?.Dispose();
         gameState.RoundCts = new CancellationTokenSource();
         var ct = gameState.RoundCts.Token;
 
         gameState.CurrentRound = round;
-        
-        // Generate round data using MemoryColorsGame
-        // Use round number as difficulty to increase challenge with each round
+
         var roundData = gameState.GameEngine.GenerateData(round, round);
         gameState.CurrentRoundData = roundData;
 
-        // Notify players that round is starting
         await Clients.Group(roomId).RoundStarting(round, 3);
-        
+
         try
         {
-            // Show colors phase
-            await Clients.Group(roomId).ShowColors(roundData, 2000); // Show for 2 seconds
-            
-            // After showing colors, start input phase
+            await Clients.Group(roomId).ShowColors(roundData, 2000);
             await Task.Delay(2000, ct);
-            
+
             if (ct.IsCancellationRequested) return;
-            
+
             await Clients.Group(roomId).HideColors();
             await Clients.Group(roomId).RoundInputPhase();
-            
-            // Set round start time on server (prevents client-side cheating)
+
             gameState.RoundStartTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            
-            // Reset player answers for this round
             gameState.ClearAnswers();
         }
         catch (OperationCanceledException)
         {
-            // Round was cancelled (e.g., player disconnected)
             return;
         }
     }
@@ -244,32 +213,28 @@ public class GameHub : Hub<IGameClient>
     public async Task SubmitAnswer(string[] colors)
     {
         var playerId = Context.ConnectionId;
-        
+
         if (!_playerRooms.TryGetValue(playerId, out var roomId))
             return;
-            
+
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        // Calculate response time server-side (prevents client-side cheating)
         var currentTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var timeMs = (int)(currentTimeMs - gameState.RoundStartTimeMs);
 
-        // Store player's answer (thread-safe)
         gameState.TryAddAnswer(playerId, (timeMs, colors));
 
-        // Check if both players have submitted answers (thread-safe)
         var answerCount = gameState.GetAnswerCount();
         var playersInRoom = _playerRooms.Count(kvp => kvp.Value == roomId);
-        
-        if (answerCount >= 2 || playersInRoom == 1) // Solo mode
+
+        if (answerCount >= 2 || playersInRoom == 1)
         {
             if (gameState.TryStartRoundProcessing())
                 await ProcessRoundResults(roomId);
         }
         else
         {
-            // Notify opponent that player has finished
             await Clients.OthersInGroup(roomId).OpponentFinished("You");
         }
     }
@@ -302,6 +267,10 @@ public class GameHub : Hub<IGameClient>
                 IsPerfect = validationResult.IsPerfect,
                 TimeMs = timeMs
             };
+
+            // Accumulate per-player perfect round count
+            if (validationResult.IsPerfect)
+                gameState.PlayerPerfectRounds[playerId] = gameState.PlayerPerfectRounds.GetValueOrDefault(playerId) + 1;
         }
 
         foreach (var playerId in gameState.PlayerRoundAnswers.Keys)
@@ -319,14 +288,12 @@ public class GameHub : Hub<IGameClient>
             });
         }
 
-        // Check if game is over (3 rounds completed)
         if (gameState.CurrentRound >= 3)
         {
             await EndMatch(roomId);
         }
         else
         {
-            // Start next round after a delay
             await Task.Delay(3000);
             await StartRound(roomId, gameState.CurrentRound + 1);
         }
@@ -337,12 +304,10 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        // Determine winner based on total scores (handle ties properly)
         var playerIds = gameState.PlayerScores.Keys.ToList();
         string player1Id = "";
         string player2Id = "";
-        
-        // Find the actual player connection IDs
+
         foreach (var kvp in gameState.PlayerConnectionIds)
         {
             if (kvp.Value == "Player1")
@@ -350,39 +315,22 @@ public class GameHub : Hub<IGameClient>
             else if (kvp.Value == "Player2")
                 player2Id = kvp.Key;
         }
-        
-        // Get scores for both players
+
         int player1Score = player1Id != "" && gameState.PlayerScores.ContainsKey(player1Id) ? gameState.PlayerScores[player1Id] : 0;
         int player2Score = player2Id != "" && gameState.PlayerScores.ContainsKey(player2Id) ? gameState.PlayerScores[player2Id] : 0;
-        
-        // Determine winner
+
         string winner = "";
         bool isTie = player1Score == player2Score;
-        
+
         if (!isTie)
-        {
             winner = player1Score > player2Score ? "Player1" : "Player2";
-        }
 
-        // Prepare final results with proper player identification
-        var finalResults = new Dictionary<string, object>();
-        
-        // Add both players to results with their scores
-        finalResults["Player1"] = new
+        var finalResults = new Dictionary<string, object>
         {
-            TotalScore = player1Score,
-            IsWinner = !isTie && winner == "Player1",
-            IsTie = isTie
-        };
-        
-        finalResults["Player2"] = new
-        {
-            TotalScore = player2Score,
-            IsWinner = !isTie && winner == "Player2",
-            IsTie = isTie
+            ["Player1"] = new { TotalScore = player1Score, IsWinner = !isTie && winner == "Player1", IsTie = isTie },
+            ["Player2"] = new { TotalScore = player2Score, IsWinner = !isTie && winner == "Player2", IsTie = isTie }
         };
 
-        // Send match over event with clear winner information
         await Clients.Group(roomId).MatchOver(new
         {
             Results = finalResults,
@@ -392,158 +340,109 @@ public class GameHub : Hub<IGameClient>
             IsTie = isTie
         });
 
-        // Save XP to database for both players
-        await SaveMatchResultsToDatabase(player1Id, player2Id, player1Score, player2Score, winner, isTie, gameState);
-
-        // Cancel any ongoing round operations
+        // Cleanup game state BEFORE saving to DB so a DB failure never leaks state
         gameState.RoundCts?.Cancel();
         gameState.RoundCts?.Dispose();
-
-        // Clean up game state
         _roomGameStates.TryRemove(roomId, out _);
-        
-        // Update player states
-        foreach (var playerId in playerIds)
+
+        foreach (var pid in playerIds)
         {
-            if (_playerStates.TryGetValue(playerId, out var stateMachine))
-            {
-                if (stateMachine.CanTransitionTo(GameState.GameEnded))
-                    stateMachine.TransitionTo(GameState.GameEnded);
-            }
+            if (_playerStates.TryGetValue(pid, out var sm) && sm.CanTransitionTo(GameState.GameEnded))
+                sm.TransitionTo(GameState.GameEnded);
         }
+
+        // Persist XP after cleanup so game state is always consistent
+        await SaveMatchResultsToDatabase(player1Id, player2Id, player1Score, player2Score, winner, isTie, gameState);
     }
 
     private async Task SaveMatchResultsToDatabase(string player1Id, string player2Id, int player1Score, int player2Score, string winner, bool isTie, RoomGameState gameState)
     {
-        try
+        var player1UserId = GetUserIdFromConnection(player1Id);
+        var player2UserId = GetUserIdFromConnection(player2Id);
+
+        // Per-player perfect round counts (fixed: was hardcoded to player1's value for both)
+        var player1PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player1Id);
+        var player2PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player2Id);
+
+        int player1Xp = 24 + (player1PerfectRounds * 5);
+        int player2Xp = 24 + (player2PerfectRounds * 5);
+
+        if (!isTie)
         {
-            // Get user IDs from HttpContext if authenticated
-            var player1UserId = await GetUserIdFromConnection(player1Id);
-            var player2UserId = await GetUserIdFromConnection(player2Id);
+            if (winner == "Player1") player1Xp += 10;
+            else player2Xp += 10;
+        }
 
-            // Calculate XP: Base 24 + Win bonus 10 + Perfect round bonus 5 per perfect round
-            // Count perfect rounds from the actual round results
-            var player1PerfectRounds = gameState.PlayerRoundAnswers.Count(kvp => 
+        const int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
             {
-                // We need to get the actual round result for this player
-                return kvp.Value.answers.Length > 0; // Simplified for now
-            });
-            
-            var player2PerfectRounds = player1PerfectRounds; // Same for both players in this implementation
+                if (!string.IsNullOrEmpty(player1UserId))
+                    await SavePlayerMatchResult(player1UserId, 1, player1Score, winner == "Player1" && !isTie, player1Xp);
 
-            int player1Xp = 24 + (player1PerfectRounds * 5);
-            int player2Xp = 24 + (player2PerfectRounds * 5);
+                if (!string.IsNullOrEmpty(player2UserId))
+                    await SavePlayerMatchResult(player2UserId, 1, player2Score, winner == "Player2" && !isTie, player2Xp);
 
-            if (!isTie)
+                return;
+            }
+            catch (Exception ex)
             {
-                if (winner == "Player1")
-                    player1Xp += 10;
+                Console.WriteLine($"[Retry {attempt}/{maxRetries}] Error saving match results: {ex.Message}");
+                if (attempt < maxRetries)
+                    await Task.Delay(500 * attempt);
                 else
-                    player2Xp += 10;
+                    Console.WriteLine("All retry attempts exhausted. XP not saved.");
             }
-
-            // Save Player 1 results
-            if (!string.IsNullOrEmpty(player1UserId))
-            {
-                await SavePlayerMatchResult(player1UserId, 1, player1Score, winner == "Player1" && !isTie, player1Xp);
-            }
-
-            // Save Player 2 results
-            if (!string.IsNullOrEmpty(player2UserId))
-            {
-                await SavePlayerMatchResult(player2UserId, 1, player2Score, winner == "Player2" && !isTie, player2Xp);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error saving match results: {ex.Message}");
         }
     }
 
-    private async Task<string?> GetUserIdFromConnection(string connectionId)
+    // Looks up userId by connectionId from the static map populated at connection time
+    private string? GetUserIdFromConnection(string connectionId)
     {
-        try
-        {
-            // Try to get user ID from Context.Items set by JWT middleware
-            if (Context.Items.TryGetValue("UserId", out var userIdObj) && userIdObj != null)
-            {
-                return userIdObj.ToString();
-            }
-            
-            // Fallback: try to get from connection mapping if stored elsewhere
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error getting user ID from connection: {ex.Message}");
-            return null;
-        }
-    }
-
-    private bool IsPerfectRound(string[] answers, RoomGameState gameState)
-    {
-        // Logic to determine if a round was perfect
-        // This would depend on the game rules - for now assuming if all answers are correct
-        return answers.Length > 0 && answers.All(a => !string.IsNullOrEmpty(a));
+        _connectionUserIds.TryGetValue(connectionId, out var userId);
+        return userId;
     }
 
     private async Task SavePlayerMatchResult(string userId, int gameType, int score, bool won, int xpEarned)
     {
-        try
+        if (!Guid.TryParse(userId, out var userGuid))
         {
-            // Use Guid.TryParse instead of Guid.Parse for safety
-            if (!Guid.TryParse(userId, out var userGuid))
-            {
-                Console.WriteLine($"Invalid user ID format: {userId}");
-                return;
-            }
-
-            // Acquire lock for thread safety
-            await _dbLock.WaitAsync();
-            try
-            {
-                // Add match history entry
-                var matchHistory = new MatchHistory
-                {
-                    UserId = userGuid,
-                    GameType = gameType,
-                    Score = score,
-                    Won = won,
-                    XPEarned = xpEarned,
-                    PlayedAt = DateTime.UtcNow
-                };
-
-                _dbContext.MatchHistories.Add(matchHistory);
-
-                // Update user total XP
-                var user = await _dbContext.Users.FindAsync(userGuid);
-                if (user != null)
-                {
-                    user.TotalXp += xpEarned;
-                    user.UpdatedAt = DateTime.UtcNow;
-                    
-                    // Level up calculation (simple: every 100 XP = level up)
-                    user.CurrentLevel = (user.TotalXp / 100) + 1;
-                }
-
-                await _dbContext.SaveChangesAsync();
-            }
-            finally
-            {
-                _dbLock.Release();
-            }
+            Console.WriteLine($"Invalid user ID format: {userId}");
+            return;
         }
-        catch (Exception ex)
+
+        // Create a fresh scope per call — avoids injecting scoped DbContext into the long-lived hub
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<SkillForgeDbContext>();
+
+        var matchHistory = new MatchHistory
         {
-            Console.WriteLine($"Error saving player match result: {ex.Message}");
+            UserId = userGuid,
+            GameType = gameType,
+            Score = score,
+            Won = won,
+            XPEarned = xpEarned,
+            PlayedAt = DateTime.UtcNow
+        };
+
+        dbContext.MatchHistories.Add(matchHistory);
+
+        var user = await dbContext.Users.FindAsync(userGuid);
+        if (user != null)
+        {
+            user.TotalXp += xpEarned;
+            user.UpdatedAt = DateTime.UtcNow;
+            user.CurrentLevel = (user.TotalXp / 100) + 1;
         }
+
+        await dbContext.SaveChangesAsync();
     }
 
     public async Task GameComplete(int score, int timeMs)
     {
-        // This method is kept for backward compatibility but the new SubmitAnswer method should be used
         var playerId = Context.ConnectionId;
-        
+
         if (!_playerStates.TryGetValue(playerId, out var stateMachine))
             return;
 
@@ -554,14 +453,11 @@ public class GameHub : Hub<IGameClient>
 
         if (_playerRooms.TryGetValue(playerId, out var roomId))
         {
-            // Notify opponent
             await Clients.OthersInGroup(roomId).OpponentFinished("You");
-            
-            // Send round result with proper opponent score lookup
+
             int opponentScore = 0;
             if (_roomGameStates.TryGetValue(roomId, out var gameState))
             {
-                // Find opponent and get their score
                 string opponentId = "";
                 foreach (var kvp in gameState.PlayerConnectionIds)
                 {
@@ -571,13 +467,11 @@ public class GameHub : Hub<IGameClient>
                         break;
                     }
                 }
-                
+
                 if (!string.IsNullOrEmpty(opponentId) && gameState.PlayerScores.ContainsKey(opponentId))
-                {
                     opponentScore = gameState.PlayerScores[opponentId];
-                }
             }
-            
+
             await Clients.Caller.RoundResult(new
             {
                 YourScore = score,
@@ -590,105 +484,54 @@ public class GameHub : Hub<IGameClient>
     public async Task LeaveLobby()
     {
         var playerId = Context.ConnectionId;
-        
+
         _waitingPlayers.TryRemove(playerId, out _);
-        
-        // Clean up state
         _playerStates.TryRemove(playerId, out _);
-        
-        // Remove from groups
+
         if (_playerRooms.TryGetValue(playerId, out var roomId))
         {
             await Groups.RemoveFromGroupAsync(playerId, roomId);
             _playerRooms.TryRemove(playerId, out _);
-            
-            // If this was the last player in the room, clean up game state
+
             if (!_playerRooms.Values.Contains(roomId))
             {
                 if (_roomGameStates.TryGetValue(roomId, out var gameState))
-                {
                     gameState.RoundCts?.Cancel();
-                }
                 _roomGameStates.TryRemove(roomId, out _);
             }
         }
-        
+
         await Groups.RemoveFromGroupAsync(playerId, "lobby");
     }
 
     public override async Task OnConnectedAsync()
     {
-        try
+        // JWT was already validated by JwtAuthenticationMiddleware; read claims from Context.User
+        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(userId))
         {
-            // Extract JWT token from query string
-            var httpContext = Context.GetHttpContext();
-            if (httpContext != null)
-            {
-                var token = httpContext.Request.Query["access_token"].FirstOrDefault();
-                if (!string.IsNullOrEmpty(token))
-                {
-                    // Validate JWT token and extract user ID
-                    var userId = ValidateJwtTokenAndExtractUserId(token);
-                    if (!string.IsNullOrEmpty(userId))
-                    {
-                        // Store user ID in Context.Items for later use
-                        Context.Items["UserId"] = userId;
-                    }
-                }
-            }
+            Context.Items["UserId"] = userId;
+            _connectionUserIds[Context.ConnectionId] = userId;
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error during connection: {ex.Message}");
-        }
-        
-        await base.OnConnectedAsync();
-    }
 
-    private string? ValidateJwtTokenAndExtractUserId(string token)
-    {
-        try
-        {
-            // This is a simplified version - in practice, you'd use the JwtService
-            // For now, we'll assume the token is valid and extract a mock user ID
-            // In a real implementation, this would validate the JWT properly
-            
-            // Mock implementation for demonstration - replace with actual JWT validation
-            if (token.Length > 10) // Basic validation
-            {
-                // Return a mock user ID for testing purposes
-                // In reality, parse the JWT and extract the user ID from claims
-                return "00000000-0000-0000-0000-000000000001"; // Mock user ID
-            }
-            
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error validating JWT token: {ex.Message}");
-            return null;
-        }
+        await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var playerId = Context.ConnectionId;
-        
-        // Handle disconnection
+
+        _connectionUserIds.TryRemove(playerId, out _);
+
         if (_playerRooms.TryGetValue(playerId, out var roomId))
         {
             await Clients.OthersInGroup(roomId).OpponentDisconnected();
-            
-            // Cancel ongoing round operations before cleanup
+
             if (_roomGameStates.TryGetValue(roomId, out var gameState))
-            {
                 gameState.RoundCts?.Cancel();
-            }
         }
 
-        // LeaveLobby handles the cleanup (no double remove here)
         await LeaveLobby();
-        
         await base.OnDisconnectedAsync(exception);
     }
 }
