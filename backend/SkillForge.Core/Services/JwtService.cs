@@ -24,7 +24,11 @@ public class JwtService : IJwtService
     public string GenerateJwtToken(User user)
     {
         var jwtSettings = _configuration.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is missing")));
+        // Use environment variable as primary source for JWT key, fallback to configuration
+        var keyString = Environment.GetEnvironmentVariable("JWT_KEY") ?? jwtSettings["Key"];
+        if (string.IsNullOrEmpty(keyString))
+            throw new InvalidOperationException("JWT Key is missing. Set the JWT_KEY environment variable.");
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
@@ -40,7 +44,7 @@ public class JwtService : IJwtService
             issuer: jwtSettings["Issuer"] ?? "SkillForge",
             audience: jwtSettings["Audience"] ?? "SkillForgeUsers",
             claims: claims,
-            expires: DateTime.Now.AddHours(24),
+            expires: DateTime.UtcNow.AddHours(24), // Use UTC for consistency
             signingCredentials: creds
         );
 
