@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -49,7 +50,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="SkillForge" />
       </head>
-      <body className="min-h-full flex flex-col bg-slate-900">{children}</body>
+      <body className="min-h-full flex flex-col bg-slate-900">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }
