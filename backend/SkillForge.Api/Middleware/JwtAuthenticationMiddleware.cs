@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 
@@ -37,55 +38,64 @@ public class JwtAuthenticationMiddleware
             }
         }
 
-        if (!string.IsNullOrEmpty(token))
+        if (string.IsNullOrEmpty(token))
         {
-            try
-            {
-                var jwtSettings = _configuration.GetSection("Jwt");
-                var keyString = Environment.GetEnvironmentVariable("JWT_KEY") ?? jwtSettings["Key"];
-                
-                if (!string.IsNullOrEmpty(keyString))
-                {
-                    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
-                    var tokenHandler = new JwtSecurityTokenHandler();
-                    
-                    tokenHandler.ValidateToken(token, new TokenValidationParameters
-                    {
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = key,
-                        ValidateIssuer = true,
-                        ValidIssuer = jwtSettings["Issuer"] ?? "SkillForge",
-                        ValidateAudience = true,
-                        ValidAudience = jwtSettings["Audience"] ?? "SkillForgeUsers",
-                        ValidateLifetime = true,
-                        ClockSkew = TimeSpan.Zero
-                    }, out var validatedToken);
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
 
-                    var jwtToken = (JwtSecurityToken)validatedToken;
-                    var userId = jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
-                    var username = jwtToken.Claims.FirstOrDefault(c => c.Type == "unique_name")?.Value;
+        try
+        {
+            var jwtSettings = _configuration.GetSection("Jwt");
+            var keyString = Environment.GetEnvironmentVariable("JWT_KEY") ?? jwtSettings["Key"];
 
-                    if (!string.IsNullOrEmpty(userId))
-                    {
-                        // Store user info in HttpContext.Items for SignalR to access
-                        context.Items["UserId"] = userId;
-                        context.Items["Username"] = username ?? "Unknown";
-                    }
-                }
-            }
-            catch (Exception ex)
+            if (string.IsNullOrEmpty(keyString))
             {
-                // Token validation failed - log but don't throw
-                // Connection will proceed but without authentication context
-                Console.WriteLine($"JWT validation failed: {ex.Message}");
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
             }
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
+            var tokenHandler = new JwtSecurityTokenHandler();
+
+            var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = key,
+                ValidateIssuer = true,
+                ValidIssuer = jwtSettings["Issuer"] ?? "SkillForge",
+                ValidateAudience = true,
+                ValidAudience = jwtSettings["Audience"] ?? "SkillForgeUsers",
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            }, out var validatedToken);
+
+            var jwtToken = (JwtSecurityToken)validatedToken;
+            var userId = jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
+            var username = jwtToken.Claims.FirstOrDefault(c => c.Type == "unique_name")?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+
+            // Assign validated principal so SignalR Context.User is populated
+            context.User = principal;
+            context.Items["UserId"] = userId;
+            context.Items["Username"] = username ?? "Unknown";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"JWT validation failed: {ex.Message}");
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
         }
 
         await _next(context);
     }
 }
 
-// Extension method for cleaner registration
 public static class JwtAuthenticationMiddlewareExtensions
 {
     public static IApplicationBuilder UseJwtAuthentication(this IApplicationBuilder app)

@@ -25,7 +25,7 @@ builder.Services.AddSwaggerGen();
 // Add SignalR with custom auth
 builder.Services.AddSignalR(options =>
 {
-    options.EnableDetailedErrors = true;
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
 });
 
 // Add CORS
