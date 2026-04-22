@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Api.Hubs;
+using SkillForge.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,12 +14,19 @@ builder.Services.AddDbContext<SkillForgeDbContext>(options =>
 // Add JWT service
 builder.Services.AddScoped<SkillForge.Core.Services.IJwtService, SkillForge.Core.Services.JwtService>();
 
+// Add HTTP Context Accessor for SignalR auth
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<SkillForge.Api.Services.IUserContextAccessor, SkillForge.Api.Services.HttpUserContextAccessor>();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add SignalR
-builder.Services.AddSignalR();
+// Add SignalR with custom auth
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+});
 
 // Add CORS
 builder.Services.AddCors(options =>
@@ -47,6 +55,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowFrontend");
+
+// Add JWT Authentication Middleware before SignalR
+app.UseJwtAuthentication();
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
