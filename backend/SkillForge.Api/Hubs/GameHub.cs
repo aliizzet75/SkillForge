@@ -301,7 +301,8 @@ public class GameHub : Hub<IGameClient>
 
     private async Task EndMatch(string roomId)
     {
-        if (!_roomGameStates.TryGetValue(roomId, out var gameState))
+        // TryRemove is atomic — guarantees EndMatch runs at most once per room even if called concurrently
+        if (!_roomGameStates.TryRemove(roomId, out var gameState))
             return;
 
         var playerIds = gameState.PlayerScores.Keys.ToList();
@@ -343,7 +344,6 @@ public class GameHub : Hub<IGameClient>
         // Cleanup game state BEFORE saving to DB so a DB failure never leaks state
         gameState.RoundCts?.Cancel();
         gameState.RoundCts?.Dispose();
-        _roomGameStates.TryRemove(roomId, out _);
 
         foreach (var pid in playerIds)
         {
