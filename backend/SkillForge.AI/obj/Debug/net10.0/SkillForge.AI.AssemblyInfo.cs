@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SkillForge.AI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2a73af2d267be46be61c107fddb6c962020e3ef2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+52adc8f892943909586afe0314b2c06e9f33f15c")]
 [assembly: System.Reflection.AssemblyProductAttribute("SkillForge.AI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SkillForge.AI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
