@@ -9,15 +9,11 @@ export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    // Redirect to backend OAuth endpoint
+  const handleGoogleLogin = () => {
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`;
   };
 
-  const handleFacebookLogin = async () => {
-    setIsLoading(true);
-    // Redirect to backend OAuth endpoint
+  const handleFacebookLogin = () => {
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/facebook`;
   };
 
