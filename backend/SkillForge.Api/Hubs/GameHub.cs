@@ -3,6 +3,11 @@ using Microsoft.AspNetCore.SignalR;
 using SkillForge.Core.StateMachine;
 using SkillForge.Core.Models;
 using SkillForge.Games;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace SkillForge.Api.Hubs;
 
