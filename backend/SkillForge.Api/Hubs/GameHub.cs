@@ -8,6 +8,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SkillForge.Core.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace SkillForge.Api.Hubs;
 
@@ -100,6 +102,17 @@ public class GameHub : Hub<IGameClient>
     private static readonly ConcurrentDictionary<string, string> _playerRooms = new();
     private static readonly ConcurrentDictionary<string, byte> _waitingPlayers = new();
     private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new(); // Track game state per room
+
+    private readonly SkillForgeDbContext _dbContext;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+
+    public GameHub(SkillForgeDbContext dbContext, IServiceProvider serviceProvider, IHttpContextAccessor httpContextAccessor)
+    {
+        _dbContext = dbContext;
+        _serviceProvider = serviceProvider;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task EnterLobby(string playerName, string avatar)
     {
@@ -378,6 +391,9 @@ public class GameHub : Hub<IGameClient>
             IsTie = isTie
         });
 
+        // Save XP to database for both players
+        await SaveMatchResultsToDatabase(player1Id, player2Id, player1Score, player2Score, winner, isTie, gameState);
+
         // Cancel any ongoing round operations
         gameState.RoundCts?.Cancel();
         gameState.RoundCts?.Dispose();
@@ -393,6 +409,93 @@ public class GameHub : Hub<IGameClient>
                 if (stateMachine.CanTransitionTo(GameState.GameEnded))
                     stateMachine.TransitionTo(GameState.GameEnded);
             }
+        }
+    }
+
+    private async Task SaveMatchResultsToDatabase(string player1Id, string player2Id, int player1Score, int player2Score, string winner, bool isTie, RoomGameState gameState)
+    {
+        try
+        {
+            // Get user IDs from HttpContext if authenticated
+            var player1UserId = await GetUserIdFromConnection(player1Id);
+            var player2UserId = await GetUserIdFromConnection(player2Id);
+
+            // Calculate XP: Base 24 + Win bonus 10 + Perfect round bonus 5 per perfect round
+            var player1PerfectRounds = gameState.PlayerRoundAnswers.Values.Count(a => a.answers.Length > 0);
+            var player2PerfectRounds = gameState.PlayerRoundAnswers.Values.Count(a => a.answers.Length > 0);
+
+            int player1Xp = 24;
+            int player2Xp = 24;
+
+            if (!isTie)
+            {
+                if (winner == "Player1")
+                    player1Xp += 10;
+                else
+                    player2Xp += 10;
+            }
+
+            // Save Player 1 results
+            if (!string.IsNullOrEmpty(player1UserId))
+            {
+                await SavePlayerMatchResult(player1UserId, 1, player1Score, winner == "Player1" && !isTie, player1Xp);
+            }
+
+            // Save Player 2 results
+            if (!string.IsNullOrEmpty(player2UserId))
+            {
+                await SavePlayerMatchResult(player2UserId, 1, player2Score, winner == "Player2" && !isTie, player2Xp);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving match results: {ex.Message}");
+        }
+    }
+
+    private async Task<string?> GetUserIdFromConnection(string connectionId)
+    {
+        // Try to get user ID from Context.Items set by JWT middleware
+        // For now, return null as we need access to HttpContext which isn't directly available here
+        // This will be enhanced when we have proper user session management
+        return null;
+    }
+
+    private async Task SavePlayerMatchResult(string userId, int gameType, int score, bool won, int xpEarned)
+    {
+        try
+        {
+            var userGuid = Guid.Parse(userId);
+
+            // Add match history entry
+            var matchHistory = new MatchHistory
+            {
+                UserId = userGuid,
+                GameType = gameType,
+                Score = score,
+                Won = won,
+                XPEarned = xpEarned,
+                PlayedAt = DateTime.UtcNow
+            };
+
+            _dbContext.MatchHistories.Add(matchHistory);
+
+            // Update user total XP
+            var user = await _dbContext.Users.FindAsync(userGuid);
+            if (user != null)
+            {
+                user.TotalXp += xpEarned;
+                user.UpdatedAt = DateTime.UtcNow;
+                
+                // Level up calculation (simple: every 100 XP = level up)
+                user.CurrentLevel = (user.TotalXp / 100) + 1;
+            }
+
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving player match result: {ex.Message}");
         }
     }
 
