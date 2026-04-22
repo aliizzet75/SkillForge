@@ -8,12 +8,22 @@ namespace SkillForge.Api.Middleware;
 public class JwtAuthenticationMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly IConfiguration _configuration;
+    private readonly ILogger<JwtAuthenticationMiddleware> _logger;
+    private readonly SymmetricSecurityKey _signingKey;
+    private readonly string _issuer;
+    private readonly string _audience;
 
-    public JwtAuthenticationMiddleware(RequestDelegate next, IConfiguration configuration)
+    public JwtAuthenticationMiddleware(RequestDelegate next, IConfiguration configuration, ILogger<JwtAuthenticationMiddleware> logger)
     {
         _next = next;
-        _configuration = configuration;
+        _logger = logger;
+
+        var jwtSettings = configuration.GetSection("Jwt");
+        var keyString = Environment.GetEnvironmentVariable("JWT_KEY") ?? jwtSettings["Key"]
+            ?? throw new InvalidOperationException("JWT key is not configured.");
+        _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
+        _issuer = jwtSettings["Issuer"] ?? "SkillForge";
+        _audience = jwtSettings["Audience"] ?? "SkillForgeUsers";
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -46,26 +56,16 @@ public class JwtAuthenticationMiddleware
 
         try
         {
-            var jwtSettings = _configuration.GetSection("Jwt");
-            var keyString = Environment.GetEnvironmentVariable("JWT_KEY") ?? jwtSettings["Key"];
-
-            if (string.IsNullOrEmpty(keyString))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return;
-            }
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
             var tokenHandler = new JwtSecurityTokenHandler();
 
             var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = key,
+                IssuerSigningKey = _signingKey,
                 ValidateIssuer = true,
-                ValidIssuer = jwtSettings["Issuer"] ?? "SkillForge",
+                ValidIssuer = _issuer,
                 ValidateAudience = true,
-                ValidAudience = jwtSettings["Audience"] ?? "SkillForgeUsers",
+                ValidAudience = _audience,
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
             }, out var validatedToken);
@@ -87,7 +87,7 @@ public class JwtAuthenticationMiddleware
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"JWT validation failed: {ex.Message}");
+            _logger.LogWarning(ex, "JWT validation failed");
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;
         }

@@ -39,13 +39,3 @@ public class HttpUserContextAccessor : IUserContextAccessor
         return null;
     }
 }
-
-/// <summary>
-/// Fallback implementation for backward compatibility
-/// Returns null if no authentication context is available
-/// </summary>
-public class NullUserContextAccessor : IUserContextAccessor
-{
-    public string? GetUserId() => null;
-    public string? GetUsername() => null;
-}

@@ -55,11 +55,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowFrontend");
+app.UseHttpsRedirection();
 
 // Add JWT Authentication Middleware before SignalR
 app.UseJwtAuthentication();
-
-app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
