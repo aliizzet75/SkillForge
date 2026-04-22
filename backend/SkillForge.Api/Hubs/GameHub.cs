@@ -25,6 +25,16 @@ public interface IGameClient
     Task PlayerAssigned(string label);
 }
 
+public class RoundPlayerResult
+{
+    public int Score { get; init; }
+    public int TotalScore { get; init; }
+    public int CorrectCount { get; init; }
+    public int TotalCount { get; init; }
+    public bool IsPerfect { get; init; }
+    public int TimeMs { get; init; }
+}
+
 // Game state tracking for each room
 public class RoomGameState
 {
@@ -250,25 +260,21 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        var roundResults = new Dictionary<string, object>();
+        var roundResults = new Dictionary<string, RoundPlayerResult>();
 
-        // Validate answers and calculate scores for each player
         foreach (var kvp in gameState.PlayerRoundAnswers)
         {
             var playerId = kvp.Key;
             var (timeMs, answers) = kvp.Value;
-            
-            // Validate answer using MemoryColorsGame
+
             var validationResult = gameState.GameEngine.ValidateAnswer(answers, gameState.CurrentRoundData);
             var score = gameState.GameEngine.CalculateScore(timeMs, validationResult.CorrectCount, validationResult.IsPerfect);
-            
-            // Update player's total score
+
             if (!gameState.PlayerScores.ContainsKey(playerId))
                 gameState.PlayerScores[playerId] = 0;
-                
             gameState.PlayerScores[playerId] += score;
-            
-            roundResults[playerId] = new
+
+            roundResults[playerId] = new RoundPlayerResult
             {
                 Score = score,
                 TotalScore = gameState.PlayerScores[playerId],
@@ -279,32 +285,16 @@ public class GameHub : Hub<IGameClient>
             };
         }
 
-        // Send individualized round results to each player with correct opponent score
         foreach (var playerId in gameState.PlayerRoundAnswers.Keys)
         {
-            // Find the opponent player ID
-            string opponentPlayerId = "";
-            foreach (var kvp in gameState.PlayerRoundAnswers)
-            {
-                if (kvp.Key != playerId)
-                {
-                    opponentPlayerId = kvp.Key;
-                    break;
-                }
-            }
-            
-            // Get opponent's score if available
-            int opponentScore = 0;
-            if (!string.IsNullOrEmpty(opponentPlayerId) && roundResults.ContainsKey(opponentPlayerId))
-            {
-                opponentScore = (int)((dynamic)roundResults[opponentPlayerId]).Score;
-            }
-            
-            // Send personalized result to each player
+            var opponentId = gameState.PlayerRoundAnswers.Keys.FirstOrDefault(k => k != playerId);
+            var opponentScore = opponentId != null && roundResults.TryGetValue(opponentId, out var opp) ? opp.Score : 0;
+            var myScore = roundResults.TryGetValue(playerId, out var my) ? my.Score : 0;
+
             await Clients.Client(playerId).RoundResult(new
             {
                 Round = gameState.CurrentRound,
-                YourScore = roundResults.ContainsKey(playerId) ? ((dynamic)roundResults[playerId]).Score : 0,
+                YourScore = myScore,
                 OpponentScore = opponentScore,
                 Results = roundResults
             });
