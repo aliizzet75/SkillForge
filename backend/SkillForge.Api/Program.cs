@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Api.Hubs;
-using SkillForge.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,11 +21,10 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add SignalR with hub filter
+// Add SignalR
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
-    options.Filters.Add(new JwtHubFilter());
 });
 
 // Add CORS
