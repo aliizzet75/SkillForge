@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { BUILD_TIME } from "@/lib/build-info";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -41,8 +42,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const buildTime = '2026-04-25T17:00:00Z';
-  const buildDisplay = buildTime ? new Date(buildTime).toLocaleString('de-DE') : '';
+  const buildDisplay = BUILD_TIME !== 'unknown' ? new Date(BUILD_TIME).toLocaleString('de-DE') : '';
 
   return (
     <html lang="de" className={`${inter.variable} h-full antialiased`}>
