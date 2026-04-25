@@ -37,11 +37,7 @@ jobs:
       - name: Build Backend
         working-directory: backend
         run: |
-          dotnet publish SkillForge.Api/SkillForge.Api.csproj \
-            -c Release \
-            -r linux-x64 \
-            --self-contained false \
-            -o /tmp/backend-publish
+          dotnet publish SkillForge.Api/SkillForge.Api.csproj             -c Release             -r linux-x64             --self-contained false             -o /tmp/backend-publish
 
       - name: Setup SSH key
         run: |
@@ -52,9 +48,12 @@ jobs:
 
       - name: Copy artifacts to VPS
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "mkdir -p /tmp/skillforge-artifacts/frontend-build /tmp/skillforge-artifacts/backend-publish"
-          scp -r frontend/.next/. ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/frontend-build/
-          scp -r /tmp/backend-publish/. ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/backend-publish/
+          tar -C frontend/.next -czf /tmp/frontend-build.tar.gz .
+          tar -C /tmp/backend-publish -czf /tmp/backend-publish.tar.gz .
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "rm -rf /tmp/skillforge-artifacts && mkdir -p /tmp/skillforge-artifacts/frontend-build /tmp/skillforge-artifacts/backend-publish"
+          scp /tmp/frontend-build.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/frontend-build.tar.gz
+          scp /tmp/backend-publish.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/backend-publish.tar.gz
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "tar -C /tmp/skillforge-artifacts/frontend-build -xzf /tmp/skillforge-artifacts/frontend-build.tar.gz && tar -C /tmp/skillforge-artifacts/backend-publish -xzf /tmp/skillforge-artifacts/backend-publish.tar.gz"
 
       - name: Deploy on VPS
         run: |
