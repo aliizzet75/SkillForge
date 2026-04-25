@@ -24,14 +24,18 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Set build timestamp
+        id: timestamp
+        run: echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
       - name: Build Frontend
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_URL: http://187.124.28.216:5001
           NEXT_PUBLIC_SIGNALR_URL: http://187.124.28.216:5001/hubs/game
+          NEXT_PUBLIC_BUILD_TIME: ${{ steps.timestamp.outputs.timestamp }}
         run: |
-          export NEXT_PUBLIC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          echo "Build time: $NEXT_PUBLIC_BUILD_TIME"
+          echo "Build time: ${{ steps.timestamp.outputs.timestamp }}"
           npm install
           npm run build
 
