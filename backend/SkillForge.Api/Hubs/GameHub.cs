@@ -131,10 +131,9 @@ public class GameHub : Hub<IGameClient>
             Console.WriteLine($"Player {playerName}: {oldState} -> {newState}");
         };
 
-        // Send current lobby players to the new joiner before adding them
-        var snapshot = _lobbyPlayers.Values
-            .Select(p => (object)new { name = p.Name, avatar = p.Avatar });
-        await Clients.Caller.LobbySnapshot(snapshot);
+        // Send each existing lobby player to the new joiner
+        foreach (var existing in _lobbyPlayers.Values)
+            await Clients.Caller.PlayerJoined(existing.Name, existing.Avatar);
 
         _lobbyPlayers[playerId] = (playerName, avatar);
         await Groups.AddToGroupAsync(playerId, "lobby");
