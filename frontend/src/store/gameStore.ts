@@ -99,11 +99,18 @@ export const initializeSignalR = async () => {
   // Event handlers
   connection.on('PlayerJoined', (playerName: string, avatar: string) => {
     console.log('Player joined:', playerName);
-    // Update online players
+    const currentPlayers = useGameStore.getState().onlinePlayers;
+    // Avoid duplicates
+    if (!currentPlayers.some(p => p.username === playerName)) {
+      const newPlayer = { id: `${Date.now()}_${playerName}`, username: playerName };
+      useGameStore.getState().setOnlinePlayers([...currentPlayers, newPlayer]);
+    }
   });
   
   connection.on('PlayerLeft', (playerName: string) => {
     console.log('Player left:', playerName);
+    const currentPlayers = useGameStore.getState().onlinePlayers;
+    useGameStore.getState().setOnlinePlayers(currentPlayers.filter(p => p.username !== playerName));
   });
   
   connection.on('MatchFound', (opponentName: string, opponentAvatar: string, gameType: number, round: number, totalRounds: number) => {
