@@ -27,7 +27,7 @@ interface GameState {
     opponentName: string;
     opponentAvatar: string;
   } | null;
-  onlinePlayers: { id: string; username: string; countryCode?: string }[];
+  onlinePlayers: { id: string; username: string; avatar?: string; countryCode?: string }[];
   // Game phase
   showColors: boolean;
   isInputPhase: boolean;
@@ -99,18 +99,18 @@ export const initializeSignalR = async () => {
   // Event handlers
   connection.on('PlayerJoined', (playerName: string, avatar: string) => {
     console.log('Player joined:', playerName);
-    const currentPlayers = useGameStore.getState().onlinePlayers;
-    // Avoid duplicates
-    if (!currentPlayers.some(p => p.username === playerName)) {
-      const newPlayer = { id: `${Date.now()}_${playerName}`, username: playerName };
-      useGameStore.getState().setOnlinePlayers([...currentPlayers, newPlayer]);
-    }
+    useGameStore.setState((state) => {
+      if (state.onlinePlayers.some(p => p.username === playerName)) return state;
+      const newPlayer = { id: crypto.randomUUID(), username: playerName, avatar };
+      return { onlinePlayers: [...state.onlinePlayers, newPlayer] };
+    });
   });
-  
+
   connection.on('PlayerLeft', (playerName: string) => {
     console.log('Player left:', playerName);
-    const currentPlayers = useGameStore.getState().onlinePlayers;
-    useGameStore.getState().setOnlinePlayers(currentPlayers.filter(p => p.username !== playerName));
+    useGameStore.setState((state) => ({
+      onlinePlayers: state.onlinePlayers.filter(p => p.username !== playerName),
+    }));
   });
   
   connection.on('MatchFound', (opponentName: string, opponentAvatar: string, gameType: number, round: number, totalRounds: number) => {
