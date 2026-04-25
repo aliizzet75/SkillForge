@@ -29,7 +29,6 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://187.124.28.216:5001
           NEXT_PUBLIC_SIGNALR_URL: http://187.124.28.216:5001/hubs/game
-          NEXT_PUBLIC_BUILD_TIME: ${{ github.run_id }}
         run: |
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           echo "export const BUILD_TIME = '$BUILD_TIME';" > src/lib/build-info.ts
@@ -70,7 +69,23 @@ jobs:
 
       - name: Restart services
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'kill \$(cat /tmp/frontend.pid 2>/dev/null) 2>/dev/null || true; sleep 1; cd /app/repo/frontend && PORT=3001 nohup npm start >> /var/log/frontend.log 2>&1 & echo \$! > /tmp/frontend.pid && echo Frontend PID: \$(cat /tmp/frontend.pid)'"
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'kill \$(cat /tmp/backend.pid 2>/dev/null) 2>/dev/null || true; sleep 1; ASPNETCORE_URLS=http://0.0.0.0:5001 ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 & echo \$! > /tmp/backend.pid && echo Backend PID: \$(cat /tmp/backend.pid)'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c '
+            fuser -k 3001/tcp 2>/dev/null || true
+            pkill -f \"next start\" 2>/dev/null || true
+            sleep 2
+            cd /app/repo/frontend
+            PORT=3001 nohup npm start >> /var/log/frontend.log 2>&1 &
+            echo \$! > /tmp/frontend.pid
+            echo Frontend PID: \$(cat /tmp/frontend.pid)
+          '"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c '
+            pkill -f SkillForge.Api 2>/dev/null || true
+            sleep 1
+            ASPNETCORE_URLS=http://0.0.0.0:5001 \
+            ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" \
+            nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 &
+            echo \$! > /tmp/backend.pid
+            echo Backend PID: \$(cat /tmp/backend.pid)
+          '"
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "rm -rf /tmp/skillforge-artifacts"
           echo "[deploy] Done."
