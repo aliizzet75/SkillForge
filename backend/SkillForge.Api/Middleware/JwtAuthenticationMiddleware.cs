@@ -38,9 +38,10 @@ public class JwtAuthenticationMiddleware
             }
         }
 
+        // No token — allow guest access (auth is optional for M1)
         if (string.IsNullOrEmpty(token))
         {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await _next(context);
             return;
         }
 
@@ -51,7 +52,7 @@ public class JwtAuthenticationMiddleware
 
             if (string.IsNullOrEmpty(keyString))
             {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await _next(context);
                 return;
             }
 
@@ -74,22 +75,16 @@ public class JwtAuthenticationMiddleware
             var userId = jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
             var username = jwtToken.Claims.FirstOrDefault(c => c.Type == "unique_name")?.Value;
 
-            if (string.IsNullOrEmpty(userId))
+            if (!string.IsNullOrEmpty(userId))
             {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return;
+                context.User = principal;
+                context.Items["UserId"] = userId;
+                context.Items["Username"] = username ?? "Unknown";
             }
-
-            // Assign validated principal so SignalR Context.User is populated
-            context.User = principal;
-            context.Items["UserId"] = userId;
-            context.Items["Username"] = username ?? "Unknown";
         }
         catch (Exception ex)
         {
             Console.WriteLine($"JWT validation failed: {ex.Message}");
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
         }
 
         await _next(context);
