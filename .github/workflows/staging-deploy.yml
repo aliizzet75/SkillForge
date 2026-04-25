@@ -28,11 +28,11 @@ jobs:
         working-directory: frontend
         run: |
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          echo "NEXT_PUBLIC_API_URL=http://187.124.28.216:5001" > .env.local
-          echo "NEXT_PUBLIC_SIGNALR_URL=http://187.124.28.216:5001/hubs/game" >> .env.local
-          echo "NEXT_PUBLIC_BUILD_TIME=$BUILD_TIME" >> .env.local
-          echo "=== .env.local ===" && cat .env.local
+          echo "{\"buildTime\":\"$BUILD_TIME\"}" > public/build-info.json
+          echo "Created public/build-info.json: $(cat public/build-info.json)"
           npm install
+          NEXT_PUBLIC_API_URL=http://187.124.28.216:5001 \
+          NEXT_PUBLIC_SIGNALR_URL=http://187.124.28.216:5001/hubs/game \
           npm run build
 
       - name: Build Backend
@@ -54,16 +54,20 @@ jobs:
       - name: Copy tars to VPS
         run: |
           tar -C frontend/.next -czf /tmp/frontend-build.tar.gz .
+          tar -C frontend/public -czf /tmp/frontend-public.tar.gz .
           tar -C /tmp/backend-publish -czf /tmp/backend-publish.tar.gz .
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "mkdir -p /tmp/skillforge-artifacts"
           scp /tmp/frontend-build.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/
+          scp /tmp/frontend-public.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/
           scp /tmp/backend-publish.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/
 
       - name: Extract inside container
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker cp /tmp/skillforge-artifacts/frontend-build.tar.gz skillforge-staging:/tmp/"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker cp /tmp/skillforge-artifacts/frontend-public.tar.gz skillforge-staging:/tmp/"
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker cp /tmp/skillforge-artifacts/backend-publish.tar.gz skillforge-staging:/tmp/"
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/repo/frontend/.next && mkdir -p /app/repo/frontend/.next && tar -C /app/repo/frontend/.next -xzf /tmp/frontend-build.tar.gz && rm /tmp/frontend-build.tar.gz && echo done: \$(ls /app/repo/frontend/.next | wc -l) items'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'mkdir -p /app/repo/frontend/public && tar -C /app/repo/frontend/public -xzf /tmp/frontend-public.tar.gz && rm /tmp/frontend-public.tar.gz && echo public done'"
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/backend-publish && mkdir -p /app/backend-publish && tar -C /app/backend-publish -xzf /tmp/backend-publish.tar.gz && rm /tmp/backend-publish.tar.gz && echo done'"
 
       - name: Restart container
