@@ -40,7 +40,11 @@ jobs:
       - name: Build Backend
         working-directory: backend
         run: |
-          dotnet publish SkillForge.Api/SkillForge.Api.csproj             -c Release             -r linux-x64             --self-contained false             -o /tmp/backend-publish
+          dotnet publish SkillForge.Api/SkillForge.Api.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained false \
+            -o /tmp/backend-publish
 
       - name: Setup SSH key
         run: |
@@ -49,15 +53,24 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Copy artifacts to VPS
+      - name: Copy tars to VPS
         run: |
           tar -C frontend/.next -czf /tmp/frontend-build.tar.gz .
           tar -C /tmp/backend-publish -czf /tmp/backend-publish.tar.gz .
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "rm -rf /tmp/skillforge-artifacts && mkdir -p /tmp/skillforge-artifacts/frontend-build /tmp/skillforge-artifacts/backend-publish"
-          scp /tmp/frontend-build.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/frontend-build.tar.gz
-          scp /tmp/backend-publish.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/backend-publish.tar.gz
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "tar -C /tmp/skillforge-artifacts/frontend-build -xzf /tmp/skillforge-artifacts/frontend-build.tar.gz && tar -C /tmp/skillforge-artifacts/backend-publish -xzf /tmp/skillforge-artifacts/backend-publish.tar.gz"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "mkdir -p /tmp/skillforge-artifacts"
+          scp /tmp/frontend-build.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/
+          scp /tmp/backend-publish.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/
 
-      - name: Deploy on VPS
+      - name: Extract inside container
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash /home/claudeuser/deploy-skillforge.sh"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker cp /tmp/skillforge-artifacts/frontend-build.tar.gz skillforge-staging:/tmp/"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker cp /tmp/skillforge-artifacts/backend-publish.tar.gz skillforge-staging:/tmp/"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/repo/frontend/.next && mkdir -p /app/repo/frontend/.next && tar -C /app/repo/frontend/.next -xzf /tmp/frontend-build.tar.gz && rm /tmp/frontend-build.tar.gz && echo done: \$(ls /app/repo/frontend/.next | wc -l) items'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/backend-publish && mkdir -p /app/backend-publish && tar -C /app/backend-publish -xzf /tmp/backend-publish.tar.gz && rm /tmp/backend-publish.tar.gz && echo done'"
+
+      - name: Restart services
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'kill \$(cat /tmp/frontend.pid 2>/dev/null) 2>/dev/null || true; sleep 1; cd /app/repo/frontend && PORT=3001 nohup npm start >> /var/log/frontend.log 2>&1 & echo \$! > /tmp/frontend.pid && echo Frontend PID: \$(cat /tmp/frontend.pid)'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'kill \$(cat /tmp/backend.pid 2>/dev/null) 2>/dev/null || true; sleep 1; ASPNETCORE_URLS=http://0.0.0.0:5001 ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 & echo \$! > /tmp/backend.pid && echo Backend PID: \$(cat /tmp/backend.pid)'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "rm -rf /tmp/skillforge-artifacts"
+          echo "[deploy] Done."
