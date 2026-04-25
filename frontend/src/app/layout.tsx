@@ -41,6 +41,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME;
+  const buildDisplay = buildTime ? new Date(buildTime).toLocaleString('de-DE') : '';
+
   return (
     <html lang="de" className={`${inter.variable} h-full antialiased`}>
       <head>
@@ -49,9 +52,15 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="SkillForge" />
+        {buildDisplay && <meta name="build-time" content={buildDisplay} />}
       </head>
       <body className="min-h-full flex flex-col bg-slate-900">
         <AuthProvider>{children}</AuthProvider>
+        {buildDisplay && (
+          <div className="fixed bottom-2 right-2 text-xs text-white/30 bg-black/50 px-2 py-1 rounded">
+            Build: {buildDisplay}
+          </div>
+        )}
       </body>
     </html>
   );
