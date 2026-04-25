@@ -99,7 +99,7 @@ export const initializeSignalR = async () => {
   // Event handlers
   connection.on('LobbySnapshot', (players: {name: string; avatar: string}[]) => {
     useGameStore.setState({
-      onlinePlayers: players.map(p => ({ id: crypto.randomUUID(), username: p.name, avatar: p.avatar })),
+      onlinePlayers: players.map(p => ({ id: p.name + "-" + Date.now(), username: p.name, avatar: p.avatar })),
     });
   });
 
@@ -107,7 +107,7 @@ export const initializeSignalR = async () => {
     console.log('Player joined:', playerName);
     useGameStore.setState((state) => {
       if (state.onlinePlayers.some(p => p.username === playerName)) return state;
-      const newPlayer = { id: crypto.randomUUID(), username: playerName, avatar };
+      const newPlayer = { id: playerName + "-" + Date.now(), username: playerName, avatar };
       return { onlinePlayers: [...state.onlinePlayers, newPlayer] };
     });
   });
