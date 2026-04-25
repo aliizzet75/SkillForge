@@ -1,8 +1,12 @@
 using System.Collections.Concurrent;
+using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using SkillForge.Core.StateMachine;
 using SkillForge.Core.Models;
 using SkillForge.Games;
+using SkillForge.Core.Data;
 
 namespace SkillForge.Api.Hubs;
 
@@ -25,20 +29,32 @@ public interface IGameClient
     Task PlayerAssigned(string label);
 }
 
+public class RoundPlayerResult
+{
+    public int Score { get; init; }
+    public int TotalScore { get; init; }
+    public int CorrectCount { get; init; }
+    public int TotalCount { get; init; }
+    public bool IsPerfect { get; init; }
+    public int TimeMs { get; init; }
+}
+
 // Game state tracking for each room
 public class RoomGameState
 {
     public int CurrentRound { get; set; } = 1;
     public Dictionary<string, int> PlayerScores { get; set; } = new();
+    public Dictionary<string, int> PlayerPerfectRounds { get; set; } = new();
     public object CurrentRoundData { get; set; } = null!;
     public Dictionary<string, (int timeMs, string[] answers)> PlayerRoundAnswers { get; set; } = new();
     public MemoryColorsGame GameEngine { get; set; } = new();
     public Dictionary<string, string> PlayerConnectionIds { get; set; } = new();
     public CancellationTokenSource RoundCts { get; set; } = new();
     public int SubmittedAnswersCount => PlayerRoundAnswers.Count;
-    public long RoundStartTimeMs { get; set; } = 0; // Timestamp when input phase starts
+    public long RoundStartTimeMs { get; set; } = 0;
     private readonly object _lock = new();
-    
+    private bool _roundBeingProcessed = false;
+
     public bool TryAddAnswer(string playerId, (int timeMs, string[] answers) answer)
     {
         lock (_lock)
@@ -49,7 +65,7 @@ public class RoomGameState
             return true;
         }
     }
-    
+
     public int GetAnswerCount()
     {
         lock (_lock)
@@ -57,12 +73,31 @@ public class RoomGameState
             return PlayerRoundAnswers.Count;
         }
     }
-    
+
     public void ClearAnswers()
     {
         lock (_lock)
         {
             PlayerRoundAnswers.Clear();
+            _roundBeingProcessed = false;
+        }
+    }
+
+    public bool TryStartRoundProcessing()
+    {
+        lock (_lock)
+        {
+            if (_roundBeingProcessed) return false;
+            _roundBeingProcessed = true;
+            return true;
+        }
+    }
+
+    public Dictionary<string, (int timeMs, string[] answers)> GetAnswerSnapshot()
+    {
+        lock (_lock)
+        {
+            return new Dictionary<string, (int timeMs, string[] answers)>(PlayerRoundAnswers);
         }
     }
 }
@@ -72,30 +107,35 @@ public class GameHub : Hub<IGameClient>
     private static readonly ConcurrentDictionary<string, GameStateMachine> _playerStates = new();
     private static readonly ConcurrentDictionary<string, string> _playerRooms = new();
     private static readonly ConcurrentDictionary<string, byte> _waitingPlayers = new();
-    private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new(); // Track game state per room
+    private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new();
+    // Maps connectionId → userId so GetUserIdFromConnection can look up any connection, not just the caller
+    private static readonly ConcurrentDictionary<string, string> _connectionUserIds = new();
+
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public GameHub(IServiceScopeFactory scopeFactory)
+    {
+        _scopeFactory = scopeFactory;
+    }
 
     public async Task EnterLobby(string playerName, string avatar)
     {
         var playerId = Context.ConnectionId;
-        
-        // Initialize player state
+
         _playerStates[playerId] = new GameStateMachine();
         _playerStates[playerId].OnStateChanged += (oldState, newState) =>
         {
             Console.WriteLine($"Player {playerName}: {oldState} -> {newState}");
         };
 
-        // Add to general lobby group
         await Groups.AddToGroupAsync(playerId, "lobby");
-        
-        // Notify others in lobby
         await Clients.Group("lobby").PlayerJoined(playerName, avatar);
     }
 
     public async Task PlayRandom()
     {
         var playerId = Context.ConnectionId;
-        
+
         if (!_playerStates.TryGetValue(playerId, out var stateMachine))
             return;
 
@@ -104,13 +144,10 @@ public class GameHub : Hub<IGameClient>
 
         stateMachine.TransitionTo(GameState.Matchmaking);
 
-        // Check for waiting players
         var opponent = _waitingPlayers.Keys.FirstOrDefault(p => p != playerId);
-        
+
         if (opponent != null)
         {
-            // Match found!
-            // Remove both players from waiting list
             _waitingPlayers.TryRemove(playerId, out _);
             _waitingPlayers.TryRemove(opponent, out _);
 
@@ -118,7 +155,6 @@ public class GameHub : Hub<IGameClient>
             _playerRooms[playerId] = roomId;
             _playerRooms[opponent] = roomId;
 
-            // Initialize room game state
             _roomGameStates[roomId] = new RoomGameState();
             _roomGameStates[roomId].PlayerConnectionIds[playerId] = "Player1";
             _roomGameStates[roomId].PlayerConnectionIds[opponent] = "Player2";
@@ -126,27 +162,20 @@ public class GameHub : Hub<IGameClient>
             await Groups.AddToGroupAsync(playerId, roomId);
             await Groups.AddToGroupAsync(opponent, roomId);
 
-            // Notify both players of their assigned labels
             await Clients.Client(playerId).PlayerAssigned("Player1");
             await Clients.Client(opponent).PlayerAssigned("Player2");
-            
-            // Notify both players about match
+
             await Clients.Client(playerId).MatchFound("Opponent", "🧙‍♂️", 1, 1, 3);
             await Clients.Client(opponent).MatchFound("Opponent", "🧙‍♀️", 1, 1, 3);
 
-            // Start game for both
             stateMachine.TransitionTo(GameState.GameStarting);
             if (_playerStates.TryGetValue(opponent, out var opponentState))
-            {
                 opponentState.TransitionTo(GameState.GameStarting);
-            }
 
-            // Start round 1
             await StartRound(roomId, 1);
         }
         else
         {
-            // Add to waiting list
             _waitingPlayers.TryAdd(playerId, 0);
             await Clients.Caller.WaitingForOpponent();
             stateMachine.TransitionTo(GameState.WaitingForOpponent);
@@ -158,44 +187,33 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        // Cancel any previous round operations
         gameState.RoundCts?.Cancel();
         gameState.RoundCts?.Dispose();
         gameState.RoundCts = new CancellationTokenSource();
         var ct = gameState.RoundCts.Token;
 
         gameState.CurrentRound = round;
-        
-        // Generate round data using MemoryColorsGame
-        // Use round number as difficulty to increase challenge with each round
+
         var roundData = gameState.GameEngine.GenerateData(round, round);
         gameState.CurrentRoundData = roundData;
 
-        // Notify players that round is starting
         await Clients.Group(roomId).RoundStarting(round, 3);
-        
+
         try
         {
-            // Show colors phase
-            await Clients.Group(roomId).ShowColors(roundData, 2000); // Show for 2 seconds
-            
-            // After showing colors, start input phase
+            await Clients.Group(roomId).ShowColors(roundData, 2000);
             await Task.Delay(2000, ct);
-            
+
             if (ct.IsCancellationRequested) return;
-            
+
             await Clients.Group(roomId).HideColors();
             await Clients.Group(roomId).RoundInputPhase();
-            
-            // Set round start time on server (prevents client-side cheating)
+
             gameState.RoundStartTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            
-            // Reset player answers for this round
             gameState.ClearAnswers();
         }
         catch (OperationCanceledException)
         {
-            // Round was cancelled (e.g., player disconnected)
             return;
         }
     }
@@ -203,31 +221,28 @@ public class GameHub : Hub<IGameClient>
     public async Task SubmitAnswer(string[] colors)
     {
         var playerId = Context.ConnectionId;
-        
+
         if (!_playerRooms.TryGetValue(playerId, out var roomId))
             return;
-            
+
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        // Calculate response time server-side (prevents client-side cheating)
         var currentTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var timeMs = (int)(currentTimeMs - gameState.RoundStartTimeMs);
 
-        // Store player's answer (thread-safe)
         gameState.TryAddAnswer(playerId, (timeMs, colors));
 
-        // Check if both players have submitted answers (thread-safe)
         var answerCount = gameState.GetAnswerCount();
         var playersInRoom = _playerRooms.Count(kvp => kvp.Value == roomId);
-        
-        if (answerCount >= 2 || playersInRoom == 1) // Solo mode
+
+        if (answerCount >= 2 || playersInRoom == 1)
         {
-            await ProcessRoundResults(roomId);
+            if (gameState.TryStartRoundProcessing())
+                await ProcessRoundResults(roomId);
         }
         else
         {
-            // Notify opponent that player has finished
             await Clients.OthersInGroup(roomId).OpponentFinished("You");
         }
     }
@@ -237,25 +252,22 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        var roundResults = new Dictionary<string, object>();
+        var roundResults = new Dictionary<string, RoundPlayerResult>();
+        var answersSnapshot = gameState.GetAnswerSnapshot();
 
-        // Validate answers and calculate scores for each player
-        foreach (var kvp in gameState.PlayerRoundAnswers)
+        foreach (var kvp in answersSnapshot)
         {
             var playerId = kvp.Key;
             var (timeMs, answers) = kvp.Value;
-            
-            // Validate answer using MemoryColorsGame
+
             var validationResult = gameState.GameEngine.ValidateAnswer(answers, gameState.CurrentRoundData);
             var score = gameState.GameEngine.CalculateScore(timeMs, validationResult.CorrectCount, validationResult.IsPerfect);
-            
-            // Update player's total score
+
             if (!gameState.PlayerScores.ContainsKey(playerId))
                 gameState.PlayerScores[playerId] = 0;
-                
             gameState.PlayerScores[playerId] += score;
-            
-            roundResults[playerId] = new
+
+            roundResults[playerId] = new RoundPlayerResult
             {
                 Score = score,
                 TotalScore = gameState.PlayerScores[playerId],
@@ -264,54 +276,33 @@ public class GameHub : Hub<IGameClient>
                 IsPerfect = validationResult.IsPerfect,
                 TimeMs = timeMs
             };
+
+            // Accumulate per-player perfect round count
+            if (validationResult.IsPerfect)
+                gameState.PlayerPerfectRounds[playerId] = gameState.PlayerPerfectRounds.GetValueOrDefault(playerId) + 1;
         }
 
-        // Send individualized round results to each player with correct opponent score
-        foreach (var playerId in gameState.PlayerRoundAnswers.Keys)
+        foreach (var playerId in answersSnapshot.Keys)
         {
-            // Find the opponent player ID
-            string opponentPlayerId = "";
-            foreach (var kvp in gameState.PlayerRoundAnswers)
-            {
-                if (kvp.Key != playerId)
-                {
-                    opponentPlayerId = kvp.Key;
-                    break;
-                }
-            }
-            
-            // Get opponent's score if available
-            int opponentScore = 0;
-            if (!string.IsNullOrEmpty(opponentPlayerId) && roundResults.ContainsKey(opponentPlayerId))
-            {
-                var opponentResult = roundResults[opponentPlayerId];
-                // Extract score from anonymous object - using reflection
-                var opponentResultDict = opponentResult.GetType().GetProperties()
-                    .ToDictionary(p => p.Name, p => p.GetValue(opponentResult));
-                if (opponentResultDict.ContainsKey("Score"))
-                {
-                    opponentScore = Convert.ToInt32(opponentResultDict["Score"]);
-                }
-            }
-            
-            // Send personalized result to each player
+            var opponentId = answersSnapshot.Keys.FirstOrDefault(k => k != playerId);
+            var opponentScore = opponentId != null && roundResults.TryGetValue(opponentId, out var opp) ? opp.Score : 0;
+            var myScore = roundResults.TryGetValue(playerId, out var my) ? my.Score : 0;
+
             await Clients.Client(playerId).RoundResult(new
             {
                 Round = gameState.CurrentRound,
-                YourScore = roundResults.ContainsKey(playerId) ? ((dynamic)roundResults[playerId]).Score : 0,
+                YourScore = myScore,
                 OpponentScore = opponentScore,
                 Results = roundResults
             });
         }
 
-        // Check if game is over (3 rounds completed)
         if (gameState.CurrentRound >= 3)
         {
             await EndMatch(roomId);
         }
         else
         {
-            // Start next round after a delay
             await Task.Delay(3000);
             await StartRound(roomId, gameState.CurrentRound + 1);
         }
@@ -322,12 +313,10 @@ public class GameHub : Hub<IGameClient>
         if (!_roomGameStates.TryGetValue(roomId, out var gameState))
             return;
 
-        // Determine winner based on total scores (handle ties properly)
         var playerIds = gameState.PlayerScores.Keys.ToList();
         string player1Id = "";
         string player2Id = "";
-        
-        // Find the actual player connection IDs
+
         foreach (var kvp in gameState.PlayerConnectionIds)
         {
             if (kvp.Value == "Player1")
@@ -335,39 +324,22 @@ public class GameHub : Hub<IGameClient>
             else if (kvp.Value == "Player2")
                 player2Id = kvp.Key;
         }
-        
-        // Get scores for both players
+
         int player1Score = player1Id != "" && gameState.PlayerScores.ContainsKey(player1Id) ? gameState.PlayerScores[player1Id] : 0;
         int player2Score = player2Id != "" && gameState.PlayerScores.ContainsKey(player2Id) ? gameState.PlayerScores[player2Id] : 0;
-        
-        // Determine winner
+
         string winner = "";
         bool isTie = player1Score == player2Score;
-        
+
         if (!isTie)
-        {
             winner = player1Score > player2Score ? "Player1" : "Player2";
-        }
 
-        // Prepare final results with proper player identification
-        var finalResults = new Dictionary<string, object>();
-        
-        // Add both players to results with their scores
-        finalResults["Player1"] = new
+        var finalResults = new Dictionary<string, object>
         {
-            TotalScore = player1Score,
-            IsWinner = !isTie && winner == "Player1",
-            IsTie = isTie
-        };
-        
-        finalResults["Player2"] = new
-        {
-            TotalScore = player2Score,
-            IsWinner = !isTie && winner == "Player2",
-            IsTie = isTie
+            ["Player1"] = new { TotalScore = player1Score, IsWinner = !isTie && winner == "Player1", IsTie = isTie },
+            ["Player2"] = new { TotalScore = player2Score, IsWinner = !isTie && winner == "Player2", IsTie = isTie }
         };
 
-        // Send match over event with clear winner information
         await Clients.Group(roomId).MatchOver(new
         {
             Results = finalResults,
@@ -377,29 +349,109 @@ public class GameHub : Hub<IGameClient>
             IsTie = isTie
         });
 
-        // Cancel any ongoing round operations
+        // Cleanup game state BEFORE saving to DB so a DB failure never leaks state
         gameState.RoundCts?.Cancel();
         gameState.RoundCts?.Dispose();
-
-        // Clean up game state
         _roomGameStates.TryRemove(roomId, out _);
-        
-        // Update player states
-        foreach (var playerId in playerIds)
+
+        foreach (var pid in playerIds)
         {
-            if (_playerStates.TryGetValue(playerId, out var stateMachine))
+            if (_playerStates.TryGetValue(pid, out var sm) && sm.CanTransitionTo(GameState.GameEnded))
+                sm.TransitionTo(GameState.GameEnded);
+        }
+
+        // Persist XP after cleanup so game state is always consistent
+        await SaveMatchResultsToDatabase(player1Id, player2Id, player1Score, player2Score, winner, isTie, gameState);
+    }
+
+    private async Task SaveMatchResultsToDatabase(string player1Id, string player2Id, int player1Score, int player2Score, string winner, bool isTie, RoomGameState gameState)
+    {
+        var player1UserId = GetUserIdFromConnection(player1Id);
+        var player2UserId = GetUserIdFromConnection(player2Id);
+
+        // Per-player perfect round counts (fixed: was hardcoded to player1's value for both)
+        var player1PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player1Id);
+        var player2PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player2Id);
+
+        int player1Xp = 24 + (player1PerfectRounds * 5);
+        int player2Xp = 24 + (player2PerfectRounds * 5);
+
+        if (!isTie)
+        {
+            if (winner == "Player1") player1Xp += 10;
+            else player2Xp += 10;
+        }
+
+        const int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
             {
-                if (stateMachine.CanTransitionTo(GameState.GameEnded))
-                    stateMachine.TransitionTo(GameState.GameEnded);
+                if (!string.IsNullOrEmpty(player1UserId))
+                    await SavePlayerMatchResult(player1UserId, 1, player1Score, winner == "Player1" && !isTie, player1Xp);
+
+                if (!string.IsNullOrEmpty(player2UserId))
+                    await SavePlayerMatchResult(player2UserId, 1, player2Score, winner == "Player2" && !isTie, player2Xp);
+
+                return;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Retry {attempt}/{maxRetries}] Error saving match results: {ex.Message}");
+                if (attempt < maxRetries)
+                    await Task.Delay(500 * attempt);
+                else
+                    Console.WriteLine("All retry attempts exhausted. XP not saved.");
             }
         }
     }
 
+    // Looks up userId by connectionId from the static map populated at connection time
+    private string? GetUserIdFromConnection(string connectionId)
+    {
+        _connectionUserIds.TryGetValue(connectionId, out var userId);
+        return userId;
+    }
+
+    private async Task SavePlayerMatchResult(string userId, int gameType, int score, bool won, int xpEarned)
+    {
+        if (!Guid.TryParse(userId, out var userGuid))
+        {
+            Console.WriteLine($"Invalid user ID format: {userId}");
+            return;
+        }
+
+        // Create a fresh scope per call — avoids injecting scoped DbContext into the long-lived hub
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<SkillForgeDbContext>();
+
+        var matchHistory = new MatchHistory
+        {
+            UserId = userGuid,
+            GameType = gameType,
+            Score = score,
+            Won = won,
+            XPEarned = xpEarned,
+            PlayedAt = DateTime.UtcNow
+        };
+
+        dbContext.MatchHistories.Add(matchHistory);
+
+        var user = await dbContext.Users.FindAsync(userGuid);
+        if (user != null)
+        {
+            user.TotalXp += xpEarned;
+            user.UpdatedAt = DateTime.UtcNow;
+            user.CurrentLevel = (user.TotalXp / 100) + 1;
+        }
+
+        await dbContext.SaveChangesAsync();
+    }
+
     public async Task GameComplete(int score, int timeMs)
     {
-        // This method is kept for backward compatibility but the new SubmitAnswer method should be used
         var playerId = Context.ConnectionId;
-        
+
         if (!_playerStates.TryGetValue(playerId, out var stateMachine))
             return;
 
@@ -410,14 +462,11 @@ public class GameHub : Hub<IGameClient>
 
         if (_playerRooms.TryGetValue(playerId, out var roomId))
         {
-            // Notify opponent
             await Clients.OthersInGroup(roomId).OpponentFinished("You");
-            
-            // Send round result with proper opponent score lookup
+
             int opponentScore = 0;
             if (_roomGameStates.TryGetValue(roomId, out var gameState))
             {
-                // Find opponent and get their score
                 string opponentId = "";
                 foreach (var kvp in gameState.PlayerConnectionIds)
                 {
@@ -427,14 +476,12 @@ public class GameHub : Hub<IGameClient>
                         break;
                     }
                 }
-                
+
                 if (!string.IsNullOrEmpty(opponentId) && gameState.PlayerScores.ContainsKey(opponentId))
-                {
                     opponentScore = gameState.PlayerScores[opponentId];
-                }
             }
-            
-            await Clients.Group(roomId).RoundResult(new
+
+            await Clients.Caller.RoundResult(new
             {
                 YourScore = score,
                 OpponentScore = opponentScore,
@@ -446,51 +493,55 @@ public class GameHub : Hub<IGameClient>
     public async Task LeaveLobby()
     {
         var playerId = Context.ConnectionId;
-        
+
         _waitingPlayers.TryRemove(playerId, out _);
-        
-        // Clean up state
         _playerStates.TryRemove(playerId, out _);
-        
-        // Remove from groups
+
         if (_playerRooms.TryGetValue(playerId, out var roomId))
         {
             await Groups.RemoveFromGroupAsync(playerId, roomId);
             _playerRooms.TryRemove(playerId, out _);
-            
-            // If this was the last player in the room, clean up game state
+
             if (!_playerRooms.Values.Contains(roomId))
             {
                 if (_roomGameStates.TryGetValue(roomId, out var gameState))
-                {
                     gameState.RoundCts?.Cancel();
-                }
                 _roomGameStates.TryRemove(roomId, out _);
             }
         }
-        
+
         await Groups.RemoveFromGroupAsync(playerId, "lobby");
+    }
+
+    public override async Task OnConnectedAsync()
+    {
+        // JWT was already validated by JwtAuthenticationMiddleware; read claims from Context.User
+        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(userId))
+        {
+            Context.Items["UserId"] = userId;
+            _connectionUserIds[Context.ConnectionId] = userId;
+        }
+
+        await base.OnConnectedAsync();
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var playerId = Context.ConnectionId;
-        
-        // Handle disconnection
+
+        _connectionUserIds.TryRemove(playerId, out _);
+
         if (_playerRooms.TryGetValue(playerId, out var roomId))
         {
             await Clients.OthersInGroup(roomId).OpponentDisconnected();
-            
-            // Cancel ongoing round operations before cleanup
+
             if (_roomGameStates.TryGetValue(roomId, out var gameState))
-            {
                 gameState.RoundCts?.Cancel();
-            }
         }
 
-        // LeaveLobby handles the cleanup (no double remove here)
         await LeaveLobby();
-        
+
         await base.OnDisconnectedAsync(exception);
     }
 }

@@ -14,6 +14,7 @@ public class SkillForgeDbContext : DbContext
     public DbSet<UserSkill> UserSkills => Set<UserSkill>();
     public DbSet<GameSession> GameSessions => Set<GameSession>();
     public DbSet<GameRound> GameRounds => Set<GameRound>();
+    public DbSet<MatchHistory> MatchHistories => Set<MatchHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

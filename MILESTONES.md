@@ -26,7 +26,7 @@
 | Task | Beschreibung | Status |
 |------|---------------------------------------------|------|
 | ✅ T2.1 | JWT-Token bei Login zurückgeben | Gemerged (PR #16) |
-| ⏳ T2.2 | Auth-Middleware für GameHub | Offen |
+| ✅ T2.2 | Auth-Middleware für GameHub | Gemerged (PR #19) |
 | ⏳ T2.3 | XP nach Match in PostgreSQL persistieren | Offen |
 | ✅ T2.4 | Password-Hashing: SHA256 → bcrypt | Gemerged (PR #15, #17) |
 | ⏳ T2.5 | Frontend: Login/Register UI mit Token-Storage | Offen |
@@ -81,6 +81,6 @@
 
 ---
 
-**Aktueller Fokus:** M2 — Auth & persistente Profile (T2.2, T2.3, T2.5, T2.6 offen)
+**Aktueller Fokus:** M2 — Auth & persistente Profile (T2.3, T2.5, T2.6 offen)
 
 _Updated: 2026-04-22_
