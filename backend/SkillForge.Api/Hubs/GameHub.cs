@@ -27,6 +27,7 @@ public interface IGameClient
     Task SoloModeActivated();
     Task WaitingForOpponent();
     Task PlayerAssigned(string label);
+    Task LobbySnapshot(IEnumerable<object> players);
 }
 
 public class RoundPlayerResult
@@ -110,6 +111,8 @@ public class GameHub : Hub<IGameClient>
     private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new();
     // Maps connectionId → userId so GetUserIdFromConnection can look up any connection, not just the caller
     private static readonly ConcurrentDictionary<string, string> _connectionUserIds = new();
+    // Tracks players currently in the lobby: connectionId → (name, avatar)
+    private static readonly ConcurrentDictionary<string, (string Name, string Avatar)> _lobbyPlayers = new();
 
     private readonly IServiceScopeFactory _scopeFactory;
 
@@ -128,6 +131,12 @@ public class GameHub : Hub<IGameClient>
             Console.WriteLine($"Player {playerName}: {oldState} -> {newState}");
         };
 
+        // Send current lobby players to the new joiner before adding them
+        var snapshot = _lobbyPlayers.Values
+            .Select(p => (object)new { name = p.Name, avatar = p.Avatar });
+        await Clients.Caller.LobbySnapshot(snapshot);
+
+        _lobbyPlayers[playerId] = (playerName, avatar);
         await Groups.AddToGroupAsync(playerId, "lobby");
         await Clients.Group("lobby").PlayerJoined(playerName, avatar);
     }
@@ -509,6 +518,9 @@ public class GameHub : Hub<IGameClient>
                 _roomGameStates.TryRemove(roomId, out _);
             }
         }
+
+        if (_lobbyPlayers.TryRemove(playerId, out var player))
+            await Clients.Group("lobby").PlayerLeft(player.Name);
 
         await Groups.RemoveFromGroupAsync(playerId, "lobby");
     }
