@@ -27,7 +27,7 @@ builder.Services.AddSingleton<SkillForge.Api.Middleware.JwtHubFilter>();
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
-}).AddHubOptions<GameHub>(o => o.AddFilter<SkillForge.Api.Middleware.JwtHubFilter>());
+}).AddHubOptions<GameHub>(o => o.AddFilter(typeof(SkillForge.Api.Middleware.JwtHubFilter)));
 
 // Add CORS
 builder.Services.AddCors(options =>
