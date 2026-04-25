@@ -30,8 +30,9 @@ jobs:
           NEXT_PUBLIC_API_URL: http://187.124.28.216:5001
           NEXT_PUBLIC_SIGNALR_URL: http://187.124.28.216:5001/hubs/game
         run: |
-          echo "NEXT_PUBLIC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .env.production
-          cat .env.production
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          sed -i "s|process.env.NEXT_PUBLIC_BUILD_TIME|'$BUILD_TIME'|g" src/app/layout.tsx
+          grep "BUILD_TIME" src/app/layout.tsx
           npm install
           npm run build
 
