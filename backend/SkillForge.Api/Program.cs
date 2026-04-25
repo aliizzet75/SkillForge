@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Api.Hubs;
+using SkillForge.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
