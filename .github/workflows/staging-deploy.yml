@@ -12,9 +12,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set build time
-        run: echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -29,12 +26,12 @@ jobs:
 
       - name: Build Frontend
         working-directory: frontend
-        env:
-          NEXT_PUBLIC_API_URL: http://187.124.28.216:5001
-          NEXT_PUBLIC_SIGNALR_URL: http://187.124.28.216:5001/hubs/game
-          NEXT_PUBLIC_BUILD_TIME: ${{ env.BUILD_TIME }}
         run: |
-          echo "Building with NEXT_PUBLIC_BUILD_TIME=$NEXT_PUBLIC_BUILD_TIME"
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "NEXT_PUBLIC_API_URL=http://187.124.28.216:5001" > .env.local
+          echo "NEXT_PUBLIC_SIGNALR_URL=http://187.124.28.216:5001/hubs/game" >> .env.local
+          echo "NEXT_PUBLIC_BUILD_TIME=$BUILD_TIME" >> .env.local
+          echo "=== .env.local ===" && cat .env.local
           npm install
           npm run build
 
