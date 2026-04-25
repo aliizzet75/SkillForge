@@ -302,6 +302,7 @@ export default function Home() {
       <div className="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
         <h1 className="text-4xl font-bold text-white text-center mb-2">🧠 SkillForge</h1>
         <p className="text-white/60 text-center mb-8">Trainiere dein Gehirn. Messe deine Skills.</p>
+        <p className="text-white/40 text-center text-xs mb-2">Build: {new Date(process.env.NEXT_PUBLIC_BUILD_TIME || '').toLocaleString('de-DE')}</p>
 
         <div className="space-y-4">
           <div>
