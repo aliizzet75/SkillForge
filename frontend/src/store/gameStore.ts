@@ -97,6 +97,12 @@ export const initializeSignalR = async () => {
     .build();
   
   // Event handlers
+  connection.on('LobbySnapshot', (players: {name: string; avatar: string}[]) => {
+    useGameStore.setState({
+      onlinePlayers: players.map(p => ({ id: crypto.randomUUID(), username: p.name, avatar: p.avatar })),
+    });
+  });
+
   connection.on('PlayerJoined', (playerName: string, avatar: string) => {
     console.log('Player joined:', playerName);
     useGameStore.setState((state) => {
