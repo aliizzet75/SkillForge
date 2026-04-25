@@ -92,6 +92,14 @@ public class RoomGameState
             return true;
         }
     }
+
+    public Dictionary<string, (int timeMs, string[] answers)> GetAnswerSnapshot()
+    {
+        lock (_lock)
+        {
+            return new Dictionary<string, (int timeMs, string[] answers)>(PlayerRoundAnswers);
+        }
+    }
 }
 
 public class GameHub : Hub<IGameClient>
@@ -245,8 +253,9 @@ public class GameHub : Hub<IGameClient>
             return;
 
         var roundResults = new Dictionary<string, RoundPlayerResult>();
+        var answersSnapshot = gameState.GetAnswerSnapshot();
 
-        foreach (var kvp in gameState.PlayerRoundAnswers)
+        foreach (var kvp in answersSnapshot)
         {
             var playerId = kvp.Key;
             var (timeMs, answers) = kvp.Value;
@@ -273,9 +282,9 @@ public class GameHub : Hub<IGameClient>
                 gameState.PlayerPerfectRounds[playerId] = gameState.PlayerPerfectRounds.GetValueOrDefault(playerId) + 1;
         }
 
-        foreach (var playerId in gameState.PlayerRoundAnswers.Keys)
+        foreach (var playerId in answersSnapshot.Keys)
         {
-            var opponentId = gameState.PlayerRoundAnswers.Keys.FirstOrDefault(k => k != playerId);
+            var opponentId = answersSnapshot.Keys.FirstOrDefault(k => k != playerId);
             var opponentScore = opponentId != null && roundResults.TryGetValue(opponentId, out var opp) ? opp.Score : 0;
             var myScore = roundResults.TryGetValue(playerId, out var my) ? my.Score : 0;
 
@@ -532,6 +541,7 @@ public class GameHub : Hub<IGameClient>
         }
 
         await LeaveLobby();
+
         await base.OnDisconnectedAsync(exception);
     }
 }
