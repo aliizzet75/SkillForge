@@ -29,8 +29,9 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://187.124.28.216:5001
           NEXT_PUBLIC_SIGNALR_URL: http://187.124.28.216:5001/hubs/game
-          NEXT_PUBLIC_BUILD_TIME: ${{ github.run_started_at }}
         run: |
+          export NEXT_PUBLIC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "Build time: $NEXT_PUBLIC_BUILD_TIME"
           npm install
           npm run build
 
