@@ -32,7 +32,6 @@ jobs:
         run: |
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           sed -i "s|process.env.NEXT_PUBLIC_BUILD_TIME|'$BUILD_TIME'|g" src/app/layout.tsx
-          grep "BUILD_TIME" src/app/layout.tsx
           npm install
           npm run build
 

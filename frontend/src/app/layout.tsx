@@ -41,7 +41,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME;
+  const buildTime = '2026-04-25T17:00:00Z';
   const buildDisplay = buildTime ? new Date(buildTime).toLocaleString('de-DE') : '';
 
   return (
