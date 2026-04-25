@@ -67,25 +67,23 @@ jobs:
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/repo/frontend/.next && mkdir -p /app/repo/frontend/.next && tar -C /app/repo/frontend/.next -xzf /tmp/frontend-build.tar.gz && rm /tmp/frontend-build.tar.gz && echo done: \$(ls /app/repo/frontend/.next | wc -l) items'"
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/backend-publish && mkdir -p /app/backend-publish && tar -C /app/backend-publish -xzf /tmp/backend-publish.tar.gz && rm /tmp/backend-publish.tar.gz && echo done'"
 
-      - name: Restart services
+      - name: Stop frontend
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c '
-            fuser -k 3001/tcp 2>/dev/null || true
-            pkill -f \"next start\" 2>/dev/null || true
-            sleep 2
-            cd /app/repo/frontend
-            PORT=3001 nohup npm start >> /var/log/frontend.log 2>&1 &
-            echo \$! > /tmp/frontend.pid
-            echo Frontend PID: \$(cat /tmp/frontend.pid)
-          '"
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c '
-            pkill -f SkillForge.Api 2>/dev/null || true
-            sleep 1
-            ASPNETCORE_URLS=http://0.0.0.0:5001 \
-            ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" \
-            nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 &
-            echo \$! > /tmp/backend.pid
-            echo Backend PID: \$(cat /tmp/backend.pid)
-          '"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging sh -c 'kill -9 \$(cat /tmp/frontend.pid 2>/dev/null) 2>/dev/null; pkill -9 -f next 2>/dev/null; true'"
+
+      - name: Stop backend
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging sh -c 'kill -9 \$(cat /tmp/backend.pid 2>/dev/null) 2>/dev/null; pkill -9 -f SkillForge 2>/dev/null; true'"
+
+      - name: Start frontend
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging sh -c 'cd /app/repo/frontend && PORT=3001 nohup npm start >> /var/log/frontend.log 2>&1 & echo \$! > /tmp/frontend.pid && echo Frontend PID: \$(cat /tmp/frontend.pid)'"
+
+      - name: Start backend
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging sh -c 'ASPNETCORE_URLS=http://0.0.0.0:5001 ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 & echo \$! > /tmp/backend.pid && echo Backend PID: \$(cat /tmp/backend.pid)'"
+
+      - name: Cleanup
+        run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "rm -rf /tmp/skillforge-artifacts"
           echo "[deploy] Done."
