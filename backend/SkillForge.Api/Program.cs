@@ -22,12 +22,12 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add SignalR with custom auth
-builder.Services.AddSingleton<SkillForge.Api.Middleware.JwtHubFilter>();
+// Add SignalR with hub filter
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
-}).AddHubOptions<GameHub>(o => o.AddFilter(typeof(SkillForge.Api.Middleware.JwtHubFilter)));
+    options.Filters.Add(new JwtHubFilter());
+});
 
 // Add CORS
 builder.Services.AddCors(options =>
