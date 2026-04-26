@@ -26,38 +26,61 @@ jobs:
 
       - name: Build Frontend
         working-directory: frontend
-        env:
-          NEXT_PUBLIC_API_URL: http://187.124.28.216:5001
-          NEXT_PUBLIC_SIGNALR_URL: http://187.124.28.216:5001/hubs/game
-          NEXT_PUBLIC_BUILD_TIME: ${{ github.run_id }}
         run: |
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          echo "export const BUILD_TIME = '$BUILD_TIME';" > src/lib/build-info.ts
-          cat src/lib/build-info.ts
+          echo "{\"buildTime\":\"$BUILD_TIME\"}" > public/build-info.json
+          echo "Created public/build-info.json: $(cat public/build-info.json)"
           npm install
+          NEXT_PUBLIC_API_URL=http://187.124.28.216:5001 \
+          NEXT_PUBLIC_SIGNALR_URL=http://187.124.28.216:5001/hubs/game \
           npm run build
 
       - name: Build Backend
         working-directory: backend
         run: |
-          dotnet publish SkillForge.Api/SkillForge.Api.csproj             -c Release             -r linux-x64             --self-contained false             -o /tmp/backend-publish
+          dotnet publish SkillForge.Api/SkillForge.Api.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained false \
+            -o /tmp/backend-publish
 
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Copy artifacts to VPS
+      - name: Copy tars to VPS
         run: |
           tar -C frontend/.next -czf /tmp/frontend-build.tar.gz .
+          tar -C frontend/public -czf /tmp/frontend-public.tar.gz .
           tar -C /tmp/backend-publish -czf /tmp/backend-publish.tar.gz .
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "rm -rf /tmp/skillforge-artifacts && mkdir -p /tmp/skillforge-artifacts/frontend-build /tmp/skillforge-artifacts/backend-publish"
-          scp /tmp/frontend-build.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/frontend-build.tar.gz
-          scp /tmp/backend-publish.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/backend-publish.tar.gz
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "tar -C /tmp/skillforge-artifacts/frontend-build -xzf /tmp/skillforge-artifacts/frontend-build.tar.gz && tar -C /tmp/skillforge-artifacts/backend-publish -xzf /tmp/skillforge-artifacts/backend-publish.tar.gz"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "mkdir -p /tmp/skillforge-artifacts"
+          scp /tmp/frontend-build.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/
+          scp /tmp/frontend-public.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/
+          scp /tmp/backend-publish.tar.gz ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/tmp/skillforge-artifacts/
 
-      - name: Deploy on VPS
+      - name: Extract inside container
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "bash /home/claudeuser/deploy-skillforge.sh"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker cp /tmp/skillforge-artifacts/frontend-build.tar.gz skillforge-staging:/tmp/"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker cp /tmp/skillforge-artifacts/frontend-public.tar.gz skillforge-staging:/tmp/"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker cp /tmp/skillforge-artifacts/backend-publish.tar.gz skillforge-staging:/tmp/"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/repo/frontend/.next && mkdir -p /app/repo/frontend/.next && tar -C /app/repo/frontend/.next -xzf /tmp/frontend-build.tar.gz && rm /tmp/frontend-build.tar.gz && echo done: \$(ls /app/repo/frontend/.next | wc -l) items'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'mkdir -p /app/repo/frontend/public && tar -C /app/repo/frontend/public -xzf /tmp/frontend-public.tar.gz && rm /tmp/frontend-public.tar.gz && echo public done'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/backend-publish && mkdir -p /app/backend-publish && tar -C /app/backend-publish -xzf /tmp/backend-publish.tar.gz && rm /tmp/backend-publish.tar.gz && echo done'"
+
+      - name: Restart container
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker restart skillforge-staging"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging echo container-ready"
+
+      - name: Start services
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'cd /app/repo/frontend && PORT=3001 nohup npm start >> /var/log/frontend.log 2>&1 & echo \$! > /tmp/frontend.pid && echo Frontend PID: \$(cat /tmp/frontend.pid)'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'ASPNETCORE_URLS=http://0.0.0.0:5001 ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 & echo \$! > /tmp/backend.pid && echo Backend PID: \$(cat /tmp/backend.pid)'"
+
+      - name: Cleanup
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "rm -rf /tmp/skillforge-artifacts"
+          echo "[deploy] Done."

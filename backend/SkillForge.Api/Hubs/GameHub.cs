@@ -147,6 +147,7 @@ public class GameHub : Hub<IGameClient>
         _lobbyPlayers[playerId] = (playerName, avatar);
         _nameToConnectionId[playerName] = playerId;
 
+
         await Groups.AddToGroupAsync(playerId, "lobby");
         await Clients.Group("lobby").PlayerJoined(playerName, avatar);
     }
