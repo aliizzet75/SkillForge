@@ -90,6 +90,12 @@ jobs:
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'cd /app/repo/frontend && PORT=3001 nohup npm start >> /var/log/frontend.log 2>&1 & echo \$! > /tmp/frontend.pid && echo Frontend PID: \$(cat /tmp/frontend.pid)'"
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'ASPNETCORE_URLS=http://0.0.0.0:5001 ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" Redis=\"skillforge-redis:6379\" nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 & echo \$! > /tmp/backend.pid && echo Backend PID: \$(cat /tmp/backend.pid)'"
 
+      - name: Health check
+        run: |
+          sleep 10
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "curl -sf http://localhost:5001/health && echo 'Backend OK' || (echo 'Backend FAILED'; docker exec skillforge-staging tail -20 /var/log/backend.log; exit 1)"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "curl -sf http://localhost:3001 && echo 'Frontend OK' || echo 'Frontend still starting'"
+
       - name: Cleanup
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "rm -rf /tmp/skillforge-artifacts"
