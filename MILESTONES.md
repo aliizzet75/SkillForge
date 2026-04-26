@@ -19,35 +19,37 @@
 
 ---
 
-## M2: Auth + persistente Profile 🔐 ⏳ AKTIV
+## M2: Auth + persistente Profile 🔐 ✅ FERTIG
 
 **Ziel:** Spieler registrieren sich, loggen ein, XP wird gespeichert
 
 | Task | Beschreibung | Status |
 |------|---------------------------------------------|------|
-| ✅ T2.1 | JWT-Token bei Login zurückgeben | Gemerged (PR #16) |
-| ✅ T2.2 | Auth-Middleware für GameHub | Gemerged (PR #19) |
-| ⏳ T2.3 | XP nach Match in PostgreSQL persistieren | Offen |
-| ✅ T2.4 | Password-Hashing: SHA256 → bcrypt | Gemerged (PR #15, #17) |
-| ⏳ T2.5 | Frontend: Login/Register UI mit Token-Storage | Offen |
-| ⏳ T2.6 | Frontend: Skill-Anzeige nach Match (+24 XP) | Offen |
+| ✅ T2.1 | JWT-Token bei Login zurückgeben | Gemerged |
+| ✅ T2.2 | Auth-Middleware für GameHub | Gemerged |
+| ✅ T2.3 | XP nach Match in PostgreSQL persistieren | Gemerged |
+| ✅ T2.4 | Password-Hashing: SHA256 → bcrypt | Gemerged |
+| ✅ T2.5 | Frontend: Login/Register UI mit Token-Storage | Gemerged |
+| ✅ T2.6 | Frontend: Skill-Anzeige nach Match (+24 XP) | Gemerged |
 
-**Definition of Done:** User registriert, spielt 3 Matches, sieht XP-Aufstieg.
+**Definition of Done:** User registriert, spielt 3 Matches, sieht XP-Aufstieg. ✅
 
 ---
 
-## M3: Lobby + Skill-basiertes Matchmaking 🏆
+## M3: Lobby + Skill-basiertes Matchmaking 🏆 ✅ FERTIG
 
 **Ziel:** Echte Lobby mit Online-Spielerliste, skill-basiertes Matching
 
 | Task | Beschreibung | Status |
 |------|---------------------------------------|------|
-| ⏳ T3.1 | Lobby: Online-Spielerliste in Echtzeit | Offen |
-| ⏳ T3.2 | Matchmaking: Skill-basierte Queue | Offen |
-| ⏳ T3.3 | Matchmaking: Timeout nach 30s → AI/Solo | Offen |
-| ⏳ T3.4 | Challenge: Spieler direkt herausfordern | Offen |
-| ⏳ T3.5 | Disconnect-Handling | Offen |
-| ⏳ T3.6 | Redis: Matchmaking-Queue und Sessions | Offen |
+| ✅ T3.1 | Lobby: Online-Spielerliste in Echtzeit | Gemerged |
+| ✅ T3.2 | Matchmaking: Skill-basierte Queue (±2 Level, ältester zuerst) | Gemerged |
+| ✅ T3.3 | Matchmaking: 30s Timeout → MatchmakingTimeout Event | Gemerged |
+| ✅ T3.4 | Challenge: Spieler direkt herausfordern + Annehmen/Ablehnen | Gemerged |
+| ✅ T3.5 | Disconnect-Handling: Walkover-Sieg für verbleibenden Spieler | Gemerged |
+| ✅ T3.6 | Redis: Lobby, Matchmaking-Queue, Sessions + SignalR Backplane | Gemerged |
+
+**Definition of Done:** 5+ Spieler gleichzeitig in Lobby, automatisches Matching funktioniert. ✅
 
 ---
 
@@ -81,6 +83,6 @@
 
 ---
 
-**Aktueller Fokus:** M2 — Auth & persistente Profile (T2.3, T2.5, T2.6 offen)
+**Aktueller Fokus:** M4 — Leaderboard & Skill-Tracking
 
-_Updated: 2026-04-22_
+_Updated: 2026-04-26_
