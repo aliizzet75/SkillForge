@@ -28,6 +28,10 @@ public interface IGameClient
     Task WaitingForOpponent();
     Task PlayerAssigned(string label);
     Task LobbySnapshot(IEnumerable<object> players);
+    Task ChallengeReceived(string fromPlayerName, string fromAvatar);
+    Task ChallengeAccepted(string byPlayerName);
+    Task ChallengeDeclined(string byPlayerName);
+    Task MatchmakingTimeout();
 }
 
 public class RoundPlayerResult
@@ -107,12 +111,17 @@ public class GameHub : Hub<IGameClient>
 {
     private static readonly ConcurrentDictionary<string, GameStateMachine> _playerStates = new();
     private static readonly ConcurrentDictionary<string, string> _playerRooms = new();
-    private static readonly ConcurrentDictionary<string, byte> _waitingPlayers = new();
+    // connectionId → (SkillLevel, JoinedAt)
+    private static readonly ConcurrentDictionary<string, (int Level, DateTime JoinedAt)> _waitingPlayers = new();
     private static readonly ConcurrentDictionary<string, RoomGameState> _roomGameStates = new();
-    // Maps connectionId → userId so GetUserIdFromConnection can look up any connection, not just the caller
     private static readonly ConcurrentDictionary<string, string> _connectionUserIds = new();
-    // Tracks players currently in the lobby: connectionId → (name, avatar)
     private static readonly ConcurrentDictionary<string, (string Name, string Avatar)> _lobbyPlayers = new();
+    // playerName → connectionId for challenge lookups
+    private static readonly ConcurrentDictionary<string, string> _nameToConnectionId = new();
+    // challengedConnectionId → challengerConnectionId
+    private static readonly ConcurrentDictionary<string, string> _pendingChallenges = new();
+    // connectionId → CancellationTokenSource for 30s matchmaking timeout
+    private static readonly ConcurrentDictionary<string, CancellationTokenSource> _matchmakingTimers = new();
 
     private readonly IServiceScopeFactory _scopeFactory;
 
@@ -136,6 +145,9 @@ public class GameHub : Hub<IGameClient>
             await Clients.Caller.PlayerJoined(existing.Name, existing.Avatar);
 
         _lobbyPlayers[playerId] = (playerName, avatar);
+        _nameToConnectionId[playerName] = playerId;
+
+
         await Groups.AddToGroupAsync(playerId, "lobby");
         await Clients.Group("lobby").PlayerJoined(playerName, avatar);
     }
@@ -152,42 +164,155 @@ public class GameHub : Hub<IGameClient>
 
         stateMachine.TransitionTo(GameState.Matchmaking);
 
-        var opponent = _waitingPlayers.Keys.FirstOrDefault(p => p != playerId);
+        var playerLevel = await GetPlayerLevel(playerId);
 
-        if (opponent != null)
+        // Match by skill proximity (±2 levels), prefer longest-waiting first
+        var opponent = _waitingPlayers
+            .Where(p => p.Key != playerId && Math.Abs(p.Value.Level - playerLevel) <= 2)
+            .OrderBy(p => p.Value.JoinedAt)
+            .Select(p => (KeyValuePair<string, (int Level, DateTime JoinedAt)>?)p)
+            .FirstOrDefault();
+
+        if (opponent.HasValue)
         {
+            var opponentId = opponent.Value.Key;
             _waitingPlayers.TryRemove(playerId, out _);
-            _waitingPlayers.TryRemove(opponent, out _);
+            _waitingPlayers.TryRemove(opponentId, out _);
 
-            var roomId = $"game_{Guid.NewGuid():N}";
-            _playerRooms[playerId] = roomId;
-            _playerRooms[opponent] = roomId;
+            if (_matchmakingTimers.TryRemove(opponentId, out var opponentTimer))
+                opponentTimer.Cancel();
 
-            _roomGameStates[roomId] = new RoomGameState();
-            _roomGameStates[roomId].PlayerConnectionIds[playerId] = "Player1";
-            _roomGameStates[roomId].PlayerConnectionIds[opponent] = "Player2";
-
-            await Groups.AddToGroupAsync(playerId, roomId);
-            await Groups.AddToGroupAsync(opponent, roomId);
-
-            await Clients.Client(playerId).PlayerAssigned("Player1");
-            await Clients.Client(opponent).PlayerAssigned("Player2");
-
-            await Clients.Client(playerId).MatchFound("Opponent", "🧙‍♂️", 1, 1, 3);
-            await Clients.Client(opponent).MatchFound("Opponent", "🧙‍♀️", 1, 1, 3);
-
-            stateMachine.TransitionTo(GameState.GameStarting);
-            if (_playerStates.TryGetValue(opponent, out var opponentState))
-                opponentState.TransitionTo(GameState.GameStarting);
-
-            await StartRound(roomId, 1);
+            await StartMatch(playerId, opponentId);
         }
         else
         {
-            _waitingPlayers.TryAdd(playerId, 0);
+            _waitingPlayers.TryAdd(playerId, (playerLevel, DateTime.UtcNow));
             await Clients.Caller.WaitingForOpponent();
             stateMachine.TransitionTo(GameState.WaitingForOpponent);
+
+            // 30s timeout → return to lobby if no match found
+            var cts = new CancellationTokenSource();
+            _matchmakingTimers[playerId] = cts;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(30000, cts.Token);
+                    if (_waitingPlayers.TryRemove(playerId, out _))
+                    {
+                        _matchmakingTimers.TryRemove(playerId, out _);
+                        await Clients.Client(playerId).MatchmakingTimeout();
+                    }
+                }
+                catch (OperationCanceledException) { }
+            });
         }
+    }
+
+    public Task CancelMatchmaking()
+    {
+        var playerId = Context.ConnectionId;
+
+        if (_matchmakingTimers.TryRemove(playerId, out var cts))
+            cts.Cancel();
+
+        _waitingPlayers.TryRemove(playerId, out _);
+        return Task.CompletedTask;
+    }
+
+    public async Task ChallengePlayer(string targetName)
+    {
+        var challengerId = Context.ConnectionId;
+
+        if (!_nameToConnectionId.TryGetValue(targetName, out var targetId))
+            return;
+
+        if (targetId == challengerId)
+            return;
+
+        _pendingChallenges[targetId] = challengerId;
+
+        var challengerInfo = _lobbyPlayers.TryGetValue(challengerId, out var ci) ? ci : ("Unknown", "🧙‍♀️");
+        await Clients.Client(targetId).ChallengeReceived(challengerInfo.Name, challengerInfo.Avatar);
+    }
+
+    public async Task AcceptChallenge()
+    {
+        var acceptingId = Context.ConnectionId;
+
+        if (!_pendingChallenges.TryRemove(acceptingId, out var challengerId))
+            return;
+
+        // Cancel any open matchmaking for both
+        if (_matchmakingTimers.TryRemove(challengerId, out var ct1)) ct1.Cancel();
+        if (_matchmakingTimers.TryRemove(acceptingId, out var ct2)) ct2.Cancel();
+        _waitingPlayers.TryRemove(challengerId, out _);
+        _waitingPlayers.TryRemove(acceptingId, out _);
+
+        // Ensure state machines exist
+        if (!_playerStates.ContainsKey(challengerId))
+            _playerStates[challengerId] = new GameStateMachine();
+        if (!_playerStates.ContainsKey(acceptingId))
+            _playerStates[acceptingId] = new GameStateMachine();
+
+        foreach (var pid in new[] { challengerId, acceptingId })
+        {
+            if (_playerStates.TryGetValue(pid, out var sm) && sm.CanTransitionTo(GameState.Matchmaking))
+                sm.TransitionTo(GameState.Matchmaking);
+        }
+
+        var acceptingName = _lobbyPlayers.TryGetValue(acceptingId, out var ai) ? ai.Name : "Opponent";
+        await Clients.Client(challengerId).ChallengeAccepted(acceptingName);
+
+        await StartMatch(challengerId, acceptingId);
+    }
+
+    public async Task DeclineChallenge()
+    {
+        var decliningId = Context.ConnectionId;
+
+        if (!_pendingChallenges.TryRemove(decliningId, out var challengerId))
+            return;
+
+        var declinerName = _lobbyPlayers.TryGetValue(decliningId, out var di) ? di.Name : "Opponent";
+        await Clients.Client(challengerId).ChallengeDeclined(declinerName);
+    }
+
+    private async Task StartMatch(string player1Id, string player2Id)
+    {
+        _lobbyPlayers.TryGetValue(player1Id, out var p1Info);
+        _lobbyPlayers.TryGetValue(player2Id, out var p2Info);
+
+        var p1Name = string.IsNullOrEmpty(p1Info.Name) ? "Player1" : p1Info.Name;
+        var p1Avatar = string.IsNullOrEmpty(p1Info.Avatar) ? "🧙‍♀️" : p1Info.Avatar;
+        var p2Name = string.IsNullOrEmpty(p2Info.Name) ? "Player2" : p2Info.Name;
+        var p2Avatar = string.IsNullOrEmpty(p2Info.Avatar) ? "🧙‍♂️" : p2Info.Avatar;
+
+        var roomId = $"game_{Guid.NewGuid():N}";
+        _playerRooms[player1Id] = roomId;
+        _playerRooms[player2Id] = roomId;
+
+        _roomGameStates[roomId] = new RoomGameState();
+        _roomGameStates[roomId].PlayerConnectionIds[player1Id] = "Player1";
+        _roomGameStates[roomId].PlayerConnectionIds[player2Id] = "Player2";
+
+        await Groups.AddToGroupAsync(player1Id, roomId);
+        await Groups.AddToGroupAsync(player2Id, roomId);
+
+        await Clients.Client(player1Id).PlayerAssigned("Player1");
+        await Clients.Client(player2Id).PlayerAssigned("Player2");
+
+        await Clients.Client(player1Id).MatchFound(p2Name, p2Avatar, 1, 1, 3);
+        await Clients.Client(player2Id).MatchFound(p1Name, p1Avatar, 1, 1, 3);
+
+        foreach (var pid in new[] { player1Id, player2Id })
+        {
+            if (_playerStates.TryGetValue(pid, out var sm) && sm.CanTransitionTo(GameState.GameStarting))
+                sm.TransitionTo(GameState.GameStarting);
+        }
+
+        await StartRound(roomId, 1);
     }
 
     private async Task StartRound(string roomId, int round)
@@ -285,7 +410,6 @@ public class GameHub : Hub<IGameClient>
                 TimeMs = timeMs
             };
 
-            // Accumulate per-player perfect round count
             if (validationResult.IsPerfect)
                 gameState.PlayerPerfectRounds[playerId] = gameState.PlayerPerfectRounds.GetValueOrDefault(playerId) + 1;
         }
@@ -296,12 +420,26 @@ public class GameHub : Hub<IGameClient>
             var opponentScore = opponentId != null && roundResults.TryGetValue(opponentId, out var opp) ? opp.Score : 0;
             var myScore = roundResults.TryGetValue(playerId, out var my) ? my.Score : 0;
 
+            // Include PlayerAlias in results for UI display
+            var enrichedResults = roundResults.ToDictionary(
+                r => r.Key,
+                r => (object)new
+                {
+                    r.Value.Score,
+                    r.Value.TotalScore,
+                    r.Value.CorrectCount,
+                    r.Value.TotalCount,
+                    r.Value.IsPerfect,
+                    r.Value.TimeMs,
+                    PlayerAlias = gameState.PlayerConnectionIds.TryGetValue(r.Key, out var label) ? label : r.Key
+                });
+
             await Clients.Client(playerId).RoundResult(new
             {
                 Round = gameState.CurrentRound,
                 YourScore = myScore,
                 OpponentScore = opponentScore,
-                Results = roundResults
+                Results = enrichedResults
             });
         }
 
@@ -342,7 +480,6 @@ public class GameHub : Hub<IGameClient>
         if (!isTie)
             winner = player1Score > player2Score ? "Player1" : "Player2";
 
-        // Calculate XP before sending MatchOver so it can be shown in the UI
         var player1PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player1Id);
         var player2PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player2Id);
         int player1Xp = 24 + (player1PerfectRounds * 5);
@@ -370,7 +507,6 @@ public class GameHub : Hub<IGameClient>
             IsTie = isTie
         });
 
-        // Cleanup game state BEFORE saving to DB so a DB failure never leaks state
         gameState.RoundCts?.Cancel();
         gameState.RoundCts?.Dispose();
         _roomGameStates.TryRemove(roomId, out _);
@@ -381,7 +517,6 @@ public class GameHub : Hub<IGameClient>
                 sm.TransitionTo(GameState.GameEnded);
         }
 
-        // Persist XP after cleanup so game state is always consistent
         await SaveMatchResultsToDatabase(player1Id, player2Id, player1Score, player2Score, winner, isTie, player1Xp, player2Xp);
     }
 
@@ -414,11 +549,22 @@ public class GameHub : Hub<IGameClient>
         }
     }
 
-    // Looks up userId by connectionId from the static map populated at connection time
     private string? GetUserIdFromConnection(string connectionId)
     {
         _connectionUserIds.TryGetValue(connectionId, out var userId);
         return userId;
+    }
+
+    private async Task<int> GetPlayerLevel(string connectionId)
+    {
+        var userId = GetUserIdFromConnection(connectionId);
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
+            return 1;
+
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<SkillForgeDbContext>();
+        var user = await dbContext.Users.FindAsync(userGuid);
+        return user?.CurrentLevel ?? 1;
     }
 
     private async Task SavePlayerMatchResult(string userId, int gameType, int score, bool won, int xpEarned)
@@ -429,7 +575,6 @@ public class GameHub : Hub<IGameClient>
             return;
         }
 
-        // Create a fresh scope per call — avoids injecting scoped DbContext into the long-lived hub
         using var scope = _scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<SkillForgeDbContext>();
 
@@ -502,6 +647,9 @@ public class GameHub : Hub<IGameClient>
     {
         var playerId = Context.ConnectionId;
 
+        if (_matchmakingTimers.TryRemove(playerId, out var cts))
+            cts.Cancel();
+
         _waitingPlayers.TryRemove(playerId, out _);
         _playerStates.TryRemove(playerId, out _);
 
@@ -519,14 +667,16 @@ public class GameHub : Hub<IGameClient>
         }
 
         if (_lobbyPlayers.TryRemove(playerId, out var player))
+        {
+            _nameToConnectionId.TryRemove(player.Name, out _);
             await Clients.Group("lobby").PlayerLeft(player.Name);
+        }
 
         await Groups.RemoveFromGroupAsync(playerId, "lobby");
     }
 
     public override async Task OnConnectedAsync()
     {
-        // JWT was already validated by JwtAuthenticationMiddleware; read claims from Context.User
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!string.IsNullOrEmpty(userId))
         {
@@ -543,12 +693,56 @@ public class GameHub : Hub<IGameClient>
 
         _connectionUserIds.TryRemove(playerId, out _);
 
+        // Cancel matchmaking timer
+        if (_matchmakingTimers.TryRemove(playerId, out var mmCts))
+            mmCts.Cancel();
+        _waitingPlayers.TryRemove(playerId, out _);
+
+        // Remove any pending challenges sent to this player
+        _pendingChallenges.TryRemove(playerId, out _);
+
         if (_playerRooms.TryGetValue(playerId, out var roomId))
         {
-            await Clients.OthersInGroup(roomId).OpponentDisconnected();
-
             if (_roomGameStates.TryGetValue(roomId, out var gameState))
+            {
                 gameState.RoundCts?.Cancel();
+
+                // Give remaining player a walkover win
+                var remainingId = gameState.PlayerConnectionIds.Keys.FirstOrDefault(k => k != playerId);
+                if (remainingId != null)
+                {
+                    gameState.PlayerConnectionIds.TryGetValue(remainingId, out var remainingLabel);
+                    var remainingScore = gameState.PlayerScores.GetValueOrDefault(remainingId);
+                    var disconnectedScore = gameState.PlayerScores.GetValueOrDefault(playerId);
+
+                    bool isRemainingPlayer1 = remainingLabel == "Player1";
+                    int p1Score = isRemainingPlayer1 ? remainingScore : disconnectedScore;
+                    int p2Score = isRemainingPlayer1 ? disconnectedScore : remainingScore;
+                    int p1Xp = isRemainingPlayer1 ? 34 : 0;
+                    int p2Xp = isRemainingPlayer1 ? 0 : 34;
+
+                    await Clients.Client(remainingId).MatchOver(new
+                    {
+                        Results = new Dictionary<string, object>
+                        {
+                            ["Player1"] = new { TotalScore = p1Score, IsWinner = isRemainingPlayer1, IsTie = false, XpEarned = p1Xp },
+                            ["Player2"] = new { TotalScore = p2Score, IsWinner = !isRemainingPlayer1, IsTie = false, XpEarned = p2Xp }
+                        },
+                        Winner = remainingLabel,
+                        Player1Score = p1Score,
+                        Player2Score = p2Score,
+                        Player1XpEarned = p1Xp,
+                        Player2XpEarned = p2Xp,
+                        IsTie = false
+                    });
+
+                    var winnerUserId = GetUserIdFromConnection(remainingId);
+                    if (!string.IsNullOrEmpty(winnerUserId))
+                        await SavePlayerMatchResult(winnerUserId, 1, remainingScore, true, 34);
+                }
+
+                _roomGameStates.TryRemove(roomId, out _);
+            }
         }
 
         await LeaveLobby();

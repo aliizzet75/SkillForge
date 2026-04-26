@@ -33,9 +33,11 @@ interface GameState {
   isInputPhase: boolean;
   roundResults: any | null;
   matchResults: any | null;
-  myPlayerLabel: string | null; // New field for player label
-  opponentDisconnected: boolean; // New field for opponent disconnection
-  
+  myPlayerLabel: string | null;
+  opponentDisconnected: boolean;
+  // M3: challenge
+  incomingChallenge: { fromPlayerName: string; fromAvatar: string } | null;
+
   // Actions
   setUser: (user: User | null) => void;
   setConnected: (connected: boolean) => void;
@@ -48,8 +50,10 @@ interface GameState {
   setInputPhase: (isInput: boolean) => void;
   setRoundResults: (results: any) => void;
   setMatchResults: (results: any) => void;
-  setMyPlayerLabel: (label: string | null) => void; // New action
-  setOpponentDisconnected: (disconnected: boolean) => void; // New action
+  setMyPlayerLabel: (label: string | null) => void;
+  setOpponentDisconnected: (disconnected: boolean) => void;
+  setSelectedColors: (colors: string[]) => void;
+  setIncomingChallenge: (challenge: { fromPlayerName: string; fromAvatar: string } | null) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -66,7 +70,8 @@ export const useGameStore = create<GameState>((set) => ({
   matchResults: null,
   myPlayerLabel: null,
   opponentDisconnected: false,
-  
+  incomingChallenge: null,
+
   setUser: (user) => set({ user }),
   setConnected: (isConnected) => set({ isConnected }),
   setInLobby: (isInLobby) => set({ isInLobby }),
@@ -80,6 +85,8 @@ export const useGameStore = create<GameState>((set) => ({
   setMatchResults: (matchResults) => set({ matchResults }),
   setMyPlayerLabel: (myPlayerLabel) => set({ myPlayerLabel }),
   setOpponentDisconnected: (opponentDisconnected) => set({ opponentDisconnected }),
+  setSelectedColors: (_colors) => {},
+  setIncomingChallenge: (incomingChallenge) => set({ incomingChallenge }),
 }));
 
 // SignalR Connection
@@ -89,14 +96,14 @@ export const getSignalRConnection = () => connection;
 
 export const initializeSignalR = async () => {
   if (connection) return connection;
-  
+
   const signalRUrl = process.env.NEXT_PUBLIC_SIGNALR_URL || 'http://localhost:5000/hubs/game';
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   connection = new signalR.HubConnectionBuilder()
     .withUrl(signalRUrl, token ? { accessTokenFactory: () => token } : {})
     .withAutomaticReconnect()
     .build();
-  
+
   // Event handlers
   connection.on('LobbySnapshot', (players: {name: string; avatar: string}[]) => {
     useGameStore.setState({
@@ -119,7 +126,7 @@ export const initializeSignalR = async () => {
       onlinePlayers: state.onlinePlayers.filter(p => p.username !== playerName),
     }));
   });
-  
+
   connection.on('MatchFound', (opponentName: string, opponentAvatar: string, gameType: number, round: number, totalRounds: number) => {
     useGameStore.getState().setCurrentGame({
       type: gameType,
@@ -131,15 +138,16 @@ export const initializeSignalR = async () => {
     });
     useGameStore.getState().setInGame(true);
     useGameStore.getState().setMatchmaking(false);
+    useGameStore.getState().setIncomingChallenge(null);
   });
-  
+
   connection.on('GameStarting', (gameType: number, gameData: any) => {
     const currentGame = useGameStore.getState().currentGame;
     if (currentGame) {
       useGameStore.getState().setCurrentGame({ ...currentGame, data: gameData });
     }
   });
-  
+
   connection.on('ShowColors', (colors: any, durationMs: number) => {
     console.log('Show colors:', colors, 'for', durationMs, 'ms');
     const currentGame = useGameStore.getState().currentGame;
@@ -149,60 +157,80 @@ export const initializeSignalR = async () => {
     useGameStore.getState().setShowColors(true);
     useGameStore.getState().setInputPhase(false);
   });
-  
+
   connection.on('HideColors', () => {
     console.log('Hide colors');
     useGameStore.getState().setShowColors(false);
   });
-  
+
   connection.on('RoundInputPhase', () => {
     console.log('Round input phase started');
     useGameStore.getState().setInputPhase(true);
   });
-  
+
   connection.on('RoundStarting', (round: number, totalRounds: number) => {
     console.log('Round starting:', round, 'of', totalRounds);
     useGameStore.getState().setRoundResults(null);
     useGameStore.getState().setShowColors(false);
     useGameStore.getState().setInputPhase(false);
   });
-  
+
   connection.on('OpponentFinished', (playerName: string) => {
     console.log('Opponent finished:', playerName);
   });
-  
+
   connection.on('RoundResult', (result: any) => {
     console.log('Round result:', result);
     useGameStore.getState().setRoundResults(result);
     useGameStore.getState().setShowColors(false);
     useGameStore.getState().setInputPhase(false);
   });
-  
+
   connection.on('MatchOver', (result: any) => {
     console.log('Match over:', result);
     useGameStore.getState().setMatchResults(result);
     useGameStore.getState().setShowColors(false);
     useGameStore.getState().setInputPhase(false);
   });
-  
+
   connection.on('OpponentDisconnected', () => {
     console.log('Opponent disconnected');
     useGameStore.getState().setOpponentDisconnected(true);
   });
-  
+
   connection.on('SoloModeActivated', () => {
     console.log('Solo mode activated');
   });
-  
+
   connection.on('WaitingForOpponent', () => {
     useGameStore.getState().setMatchmaking(true);
   });
-  
+
   connection.on('PlayerAssigned', (label: string) => {
     console.log('Player assigned as:', label);
     useGameStore.getState().setMyPlayerLabel(label);
   });
-  
+
+  connection.on('MatchmakingTimeout', () => {
+    console.log('Matchmaking timed out');
+    useGameStore.getState().setMatchmaking(false);
+  });
+
+  connection.on('ChallengeReceived', (fromPlayerName: string, fromAvatar: string) => {
+    console.log('Challenge received from:', fromPlayerName);
+    useGameStore.getState().setIncomingChallenge({ fromPlayerName, fromAvatar });
+  });
+
+  connection.on('ChallengeAccepted', (byPlayerName: string) => {
+    console.log('Challenge accepted by:', byPlayerName);
+    useGameStore.getState().setMatchmaking(true);
+  });
+
+  connection.on('ChallengeDeclined', (byPlayerName: string) => {
+    console.log('Challenge declined by:', byPlayerName);
+    useGameStore.getState().setMatchmaking(false);
+  });
+
   try {
     await connection.start();
     useGameStore.getState().setConnected(true);
@@ -211,7 +239,7 @@ export const initializeSignalR = async () => {
     console.error('SignalR Connection Error:', err);
     useGameStore.getState().setConnected(false);
   }
-  
+
   return connection;
 };
 
@@ -235,6 +263,35 @@ export const playRandom = async () => {
   if (conn) {
     await conn.invoke('PlayRandom');
     useGameStore.getState().setMatchmaking(true);
+  }
+};
+
+export const cancelMatchmaking = async () => {
+  const conn = getSignalRConnection();
+  if (conn) {
+    await conn.invoke('CancelMatchmaking');
+    useGameStore.getState().setMatchmaking(false);
+  }
+};
+
+export const challengePlayer = async (targetName: string) => {
+  const conn = getSignalRConnection();
+  if (conn) await conn.invoke('ChallengePlayer', targetName);
+};
+
+export const acceptChallenge = async () => {
+  const conn = getSignalRConnection();
+  if (conn) {
+    await conn.invoke('AcceptChallenge');
+    useGameStore.getState().setIncomingChallenge(null);
+  }
+};
+
+export const declineChallenge = async () => {
+  const conn = getSignalRConnection();
+  if (conn) {
+    await conn.invoke('DeclineChallenge');
+    useGameStore.getState().setIncomingChallenge(null);
   }
 };
 

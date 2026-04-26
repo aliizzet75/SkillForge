@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useGameStore, initializeSignalR, enterLobby, playRandom, submitAnswer, leaveLobby } from '@/store/gameStore';
+import { useGameStore, initializeSignalR, enterLobby, playRandom, cancelMatchmaking, challengePlayer, acceptChallenge, declineChallenge, submitAnswer, leaveLobby } from '@/store/gameStore';
 import BuildTimestamp from './BuildTimestamp';
 
 export default function Home() {
   const [playerName, setPlayerName] = useState('');
   const [avatar, setAvatar] = useState('🧙‍♀️');
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
-  
+  const [challengeSent, setChallengeSent] = useState<string | null>(null);
+
   const {
     user,
     isConnected,
@@ -22,11 +23,12 @@ export default function Home() {
     roundResults,
     matchResults,
     opponentDisconnected,
+    incomingChallenge,
     setUser,
     setInLobby,
     setMatchmaking,
-    setSelectedColors: setStoreSelectedColors,
     setOpponentDisconnected,
+    setIncomingChallenge,
   } = useGameStore();
 
   // Initialize SignalR on mount
@@ -45,15 +47,32 @@ export default function Home() {
     await playRandom();
   };
 
+  const handleCancelMatchmaking = async () => {
+    await cancelMatchmaking();
+  };
+
+  const handleChallengePlayer = async (targetName: string) => {
+    setChallengeSent(targetName);
+    await challengePlayer(targetName);
+  };
+
+  const handleAcceptChallenge = async () => {
+    await acceptChallenge();
+    setMatchmaking(true);
+  };
+
+  const handleDeclineChallenge = async () => {
+    await declineChallenge();
+  };
+
   const handleColorSelect = (color: string) => {
     if (!isInputPhase || !currentGame?.data) return;
-    
+
     const newSelected = [...selectedColors, color];
     setSelectedColors(newSelected);
-    
-    // Check if player selected all colors
+
     if (newSelected.length === currentGame.data.length) {
-      submitAnswer(newSelected); // Time is calculated server-side for anti-cheat protection
+      submitAnswer(newSelected);
       setSelectedColors([]);
     }
   };
@@ -80,13 +99,13 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 text-center">
           <h1 className="text-3xl font-bold text-white mb-6">⚠️ Spiel unterbrochen</h1>
-          
+
           <div className="text-6xl mb-4">🔌</div>
-          
+
           <p className="text-xl font-bold text-white mb-6">
             Dein Gegner hat das Spiel verlassen
           </p>
-          
+
           <button
             onClick={() => {
               leaveLobby();
@@ -107,7 +126,34 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
           <h1 className="text-3xl font-bold text-white text-center mb-6">🧠 SkillForge Lobby</h1>
-          
+
+          {/* Incoming Challenge Modal */}
+          {incomingChallenge && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 border border-white/20 rounded-2xl p-8 max-w-sm w-full text-center">
+                <div className="text-5xl mb-3">{incomingChallenge.fromAvatar}</div>
+                <h2 className="text-xl font-bold text-white mb-2">Herausforderung!</h2>
+                <p className="text-white/70 mb-6">
+                  <span className="font-bold text-white">{incomingChallenge.fromPlayerName}</span> fordert dich heraus
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleAcceptChallenge}
+                    className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl transition-all"
+                  >
+                    ✅ Annehmen
+                  </button>
+                  <button
+                    onClick={handleDeclineChallenge}
+                    className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+                  >
+                    ❌ Ablehnen
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="mb-6">
             <p className="text-white/80 mb-2">Willkommen, <span className="font-bold text-white">{playerName}</span></p>
             <p className="text-white/60 text-sm flex items-center gap-2">
@@ -119,7 +165,15 @@ export default function Home() {
           {isMatchmaking ? (
             <div className="text-center py-8">
               <div className="animate-spin text-4xl mb-4">⏳</div>
-              <p className="text-white">Suche nach Gegner...</p>
+              <p className="text-white mb-4">
+                {challengeSent ? `Warte auf Antwort von ${challengeSent}...` : 'Suche nach Gegner...'}
+              </p>
+              <button
+                onClick={handleCancelMatchmaking}
+                className="py-2 px-6 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all text-sm"
+              >
+                Abbrechen
+              </button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -129,15 +183,26 @@ export default function Home() {
               >
                 🎲 Zufälliger Gegner
               </button>
-              
+
               <div className="border-t border-white/20 pt-4 mt-4">
                 <p className="text-white/60 text-sm mb-3">Online Spieler: {onlinePlayers.length}</p>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {onlinePlayers.map((player) => (
-                    <div key={player.id} className="flex-shrink-0 bg-white/10 rounded-lg px-3 py-2 text-sm text-white">
-                      {player.username}
-                    </div>
-                  ))}
+                <div className="flex flex-col gap-2">
+                  {onlinePlayers
+                    .filter(p => p.username !== playerName)
+                    .map((player) => (
+                      <div key={player.id} className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {player.avatar && <span className="text-xl">{player.avatar}</span>}
+                          <span className="text-sm text-white">{player.username}</span>
+                        </div>
+                        <button
+                          onClick={() => handleChallengePlayer(player.username)}
+                          className="text-xs py-1 px-3 bg-indigo-500/30 hover:bg-indigo-500/60 text-indigo-300 hover:text-white rounded-lg transition-all"
+                        >
+                          ⚔️ Herausfordern
+                        </button>
+                      </div>
+                    ))}
                 </div>
               </div>
 
@@ -263,7 +328,7 @@ export default function Home() {
             ) : isInputPhase ? (
               <div>
                 <p className="text-white text-center mb-4 text-lg">🖱️ Klicke die Farben in der richtigen Reihenfolge:</p>
-                
+
                 {/* Selected Colors */}
                 <div className="flex justify-center gap-2 mb-6 min-h-[3rem]">
                   {selectedColors.map((color, i) => (
@@ -279,7 +344,7 @@ export default function Home() {
                 <div className="grid grid-cols-4 gap-4">
                   {['🔴', '🟢', '🔵', '🟡', '🟣', '🟠', '⚫', '⚪'].map((color) => {
                     const isSelected = selectedColors.includes(color);
-                    
+
                     return (
                       <button
                         key={color}
