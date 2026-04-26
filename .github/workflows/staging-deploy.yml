@@ -72,9 +72,13 @@ jobs:
 
       - name: Ensure Redis container
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker start skillforge-redis 2>/dev/null || docker run -d --name skillforge-redis redis:7-alpine"
-          STAGING_NET=$(ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker inspect skillforge-staging --format '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}' 2>/dev/null | awk '{print \$1}'")
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker network connect \$STAGING_NET skillforge-redis 2>/dev/null || true"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'ENDSSH'
+            docker network create skillforge-net 2>/dev/null || true
+            docker start skillforge-redis 2>/dev/null || docker run -d --name skillforge-redis --network skillforge-net redis:7-alpine
+            docker network connect skillforge-net skillforge-redis 2>/dev/null || true
+            docker network connect skillforge-net skillforge-staging 2>/dev/null || true
+            echo "Redis container: $(docker inspect skillforge-redis --format '{{.State.Status}}')"
+          ENDSSH
 
       - name: Restart container
         run: |

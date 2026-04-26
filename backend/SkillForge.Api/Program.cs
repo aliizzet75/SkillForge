@@ -25,9 +25,13 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add Redis
+// Add Redis — abortConnect=false so app starts even if Redis isn't reachable yet
 var redisConnectionString = builder.Configuration["Redis"] ?? "localhost:6379";
-var redisMultiplexer = ConnectionMultiplexer.Connect(redisConnectionString);
+var redisConfig = ConfigurationOptions.Parse(redisConnectionString);
+redisConfig.AbortOnConnectFail = false;
+redisConfig.ConnectTimeout = 5000;
+redisConfig.SyncTimeout = 5000;
+var redisMultiplexer = ConnectionMultiplexer.Connect(redisConfig);
 builder.Services.AddSingleton<IConnectionMultiplexer>(redisMultiplexer);
 
 // Add SignalR with Redis backplane for multi-instance support
