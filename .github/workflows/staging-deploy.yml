@@ -70,6 +70,12 @@ jobs:
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'mkdir -p /app/repo/frontend/public && tar -C /app/repo/frontend/public -xzf /tmp/frontend-public.tar.gz && rm /tmp/frontend-public.tar.gz && echo public done'"
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'rm -rf /app/backend-publish && mkdir -p /app/backend-publish && tar -C /app/backend-publish -xzf /tmp/backend-publish.tar.gz && rm /tmp/backend-publish.tar.gz && echo done'"
 
+      - name: Ensure Redis container
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker start skillforge-redis 2>/dev/null || docker run -d --name skillforge-redis redis:7-alpine"
+          STAGING_NET=$(ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker inspect skillforge-staging --format '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}' 2>/dev/null | awk '{print \$1}'")
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker network connect \$STAGING_NET skillforge-redis 2>/dev/null || true"
+
       - name: Restart container
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker restart skillforge-staging"
@@ -78,7 +84,7 @@ jobs:
       - name: Start services
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'cd /app/repo/frontend && PORT=3001 nohup npm start >> /var/log/frontend.log 2>&1 & echo \$! > /tmp/frontend.pid && echo Frontend PID: \$(cat /tmp/frontend.pid)'"
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'ASPNETCORE_URLS=http://0.0.0.0:5001 ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 & echo \$! > /tmp/backend.pid && echo Backend PID: \$(cat /tmp/backend.pid)'"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "docker exec skillforge-staging bash -c 'ASPNETCORE_URLS=http://0.0.0.0:5001 ConnectionStrings__DefaultConnection=\"Host=skillforge-staging-db;Port=5432;Database=skillforge;Username=skillforge;Password=skillforge123\" Redis=\"skillforge-redis:6379\" nohup /app/backend-publish/SkillForge.Api >> /var/log/backend.log 2>&1 & echo \$! > /tmp/backend.pid && echo Backend PID: \$(cat /tmp/backend.pid)'"
 
       - name: Cleanup
         run: |

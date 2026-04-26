@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using SkillForge.Core.Data;
 using SkillForge.Api.Hubs;
 using SkillForge.Api.Middleware;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,10 +25,18 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add SignalR
+// Add Redis
+var redisConnectionString = builder.Configuration["Redis"] ?? "localhost:6379";
+var redisMultiplexer = ConnectionMultiplexer.Connect(redisConnectionString);
+builder.Services.AddSingleton<IConnectionMultiplexer>(redisMultiplexer);
+
+// Add SignalR with Redis backplane for multi-instance support
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+}).AddStackExchangeRedis(redisConnectionString, options =>
+{
+    options.Configuration.ChannelPrefix = RedisChannel.Literal("skillforge");
 });
 
 // Add CORS
