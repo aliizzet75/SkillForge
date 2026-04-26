@@ -691,6 +691,51 @@ return false
             user.CurrentLevel = (user.TotalXp / 100) + 1;
         }
 
+        // Update skill-specific XP and recalculate percentile
+        var skillType = gameType == 1 ? "memory" : "overall";
+        var userSkill = await db.UserSkills
+            .FirstOrDefaultAsync(us => us.UserId == userGuid && us.SkillType == skillType);
+        
+        if (userSkill != null)
+        {
+            userSkill.XP += xpEarned;
+            userSkill.GamesPlayed++;
+            if (won) userSkill.GamesWon++;
+            
+            // Recalculate percentile
+            var currentXp = userSkill.XP;
+            var playersBelow = await db.UserSkills
+                .Where(us => us.SkillType == skillType && us.XP < currentXp)
+                .CountAsync();
+            var totalPlayers = await db.UserSkills
+                .Where(us => us.SkillType == skillType)
+                .CountAsync();
+            
+            userSkill.Percentile = totalPlayers == 0 ? 100 : (int)((double)playersBelow / totalPlayers * 100);
+        }
+        else
+        {
+            // Create new skill entry with initial percentile
+            var playersBelow = await db.UserSkills
+                .Where(us => us.SkillType == skillType && us.XP < xpEarned)
+                .CountAsync();
+            var totalPlayers = await db.UserSkills
+                .Where(us => us.SkillType == skillType)
+                .CountAsync();
+            var percentile = totalPlayers == 0 ? 100 : (int)((double)playersBelow / (totalPlayers + 1) * 100);
+            
+            db.UserSkills.Add(new UserSkill
+            {
+                UserId = userGuid,
+                SkillType = skillType,
+                XP = xpEarned,
+                Level = 1,
+                Percentile = percentile,
+                GamesPlayed = 1,
+                GamesWon = won ? 1 : 0
+            });
+        }
+
         await db.SaveChangesAsync();
     }
 }
