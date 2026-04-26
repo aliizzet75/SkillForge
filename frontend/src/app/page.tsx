@@ -156,15 +156,17 @@ export default function Home() {
 
   // Match Over Screen
   if (matchResults && isInGame) {
-    const { Results, Player1Score, Player2Score, Winner, IsTie } = matchResults;
+    const { Results, Player1Score, Player2Score, Player1XpEarned, Player2XpEarned, Winner, IsTie } = matchResults;
     const myPlayerLabel = useGameStore.getState().myPlayerLabel || '';
     const isWinner = Winner === myPlayerLabel;
-    
+    const myXp = myPlayerLabel === 'Player1' ? Player1XpEarned : Player2XpEarned;
+    const isLoggedIn = typeof window !== 'undefined' && !!localStorage.getItem('token');
+
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 text-center">
           <h1 className="text-3xl font-bold text-white mb-6">🏁 Spiel beendet!</h1>
-          
+
           {IsTie ? (
             <div className="text-6xl mb-4">🤝</div>
           ) : isWinner ? (
@@ -172,22 +174,31 @@ export default function Home() {
           ) : (
             <div className="text-6xl mb-4">😔</div>
           )}
-          
+
           <p className="text-2xl font-bold text-white mb-2">
             {IsTie ? 'Unentschieden!' : isWinner ? 'Du hast gewonnen!' : 'Du hast verloren!'}
           </p>
-          
+
+          {myXp && <p className="text-green-400 text-xl font-bold mb-1">+{myXp} XP</p>}
+          {!isLoggedIn && (
+            <p className="text-white/50 text-sm mb-3">
+              <a href="/login" className="text-indigo-400 underline">Einloggen</a>, um XP dauerhaft zu speichern
+            </p>
+          )}
+
           <div className="flex justify-center gap-8 my-6">
             <div className="text-center">
               <p className="text-white/60 text-sm">Spieler 1</p>
               <p className="text-3xl font-bold text-white">{Player1Score || 0}</p>
+              {Player1XpEarned && <p className="text-green-400 text-xs mt-1">+{Player1XpEarned} XP</p>}
             </div>
             <div className="text-center">
               <p className="text-white/60 text-sm">Spieler 2</p>
               <p className="text-3xl font-bold text-white">{Player2Score || 0}</p>
+              {Player2XpEarned && <p className="text-green-400 text-xs mt-1">+{Player2XpEarned} XP</p>}
             </div>
           </div>
-          
+
           <button
             onClick={handlePlayAgain}
             className="w-full py-4 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl transition-all"
@@ -342,6 +353,15 @@ export default function Home() {
           >
             {isConnected ? 'Lobby betreten →' : 'Verbinde...'}
           </button>
+
+          <div className="border-t border-white/10 pt-4 flex gap-3">
+            <a href="/login" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+              🔑 Einloggen
+            </a>
+            <a href="/register" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+              📝 Registrieren
+            </a>
+          </div>
         </div>
       </div>
     </div>
