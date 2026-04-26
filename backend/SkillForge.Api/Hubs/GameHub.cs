@@ -342,10 +342,21 @@ public class GameHub : Hub<IGameClient>
         if (!isTie)
             winner = player1Score > player2Score ? "Player1" : "Player2";
 
+        // Calculate XP before sending MatchOver so it can be shown in the UI
+        var player1PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player1Id);
+        var player2PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player2Id);
+        int player1Xp = 24 + (player1PerfectRounds * 5);
+        int player2Xp = 24 + (player2PerfectRounds * 5);
+        if (!isTie)
+        {
+            if (winner == "Player1") player1Xp += 10;
+            else player2Xp += 10;
+        }
+
         var finalResults = new Dictionary<string, object>
         {
-            ["Player1"] = new { TotalScore = player1Score, IsWinner = !isTie && winner == "Player1", IsTie = isTie },
-            ["Player2"] = new { TotalScore = player2Score, IsWinner = !isTie && winner == "Player2", IsTie = isTie }
+            ["Player1"] = new { TotalScore = player1Score, IsWinner = !isTie && winner == "Player1", IsTie = isTie, XpEarned = player1Xp },
+            ["Player2"] = new { TotalScore = player2Score, IsWinner = !isTie && winner == "Player2", IsTie = isTie, XpEarned = player2Xp }
         };
 
         await Clients.Group(roomId).MatchOver(new
@@ -354,6 +365,8 @@ public class GameHub : Hub<IGameClient>
             Winner = isTie ? "Tie" : winner,
             Player1Score = player1Score,
             Player2Score = player2Score,
+            Player1XpEarned = player1Xp,
+            Player2XpEarned = player2Xp,
             IsTie = isTie
         });
 
@@ -369,26 +382,13 @@ public class GameHub : Hub<IGameClient>
         }
 
         // Persist XP after cleanup so game state is always consistent
-        await SaveMatchResultsToDatabase(player1Id, player2Id, player1Score, player2Score, winner, isTie, gameState);
+        await SaveMatchResultsToDatabase(player1Id, player2Id, player1Score, player2Score, winner, isTie, player1Xp, player2Xp);
     }
 
-    private async Task SaveMatchResultsToDatabase(string player1Id, string player2Id, int player1Score, int player2Score, string winner, bool isTie, RoomGameState gameState)
+    private async Task SaveMatchResultsToDatabase(string player1Id, string player2Id, int player1Score, int player2Score, string winner, bool isTie, int player1Xp, int player2Xp)
     {
         var player1UserId = GetUserIdFromConnection(player1Id);
         var player2UserId = GetUserIdFromConnection(player2Id);
-
-        // Per-player perfect round counts (fixed: was hardcoded to player1's value for both)
-        var player1PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player1Id);
-        var player2PerfectRounds = gameState.PlayerPerfectRounds.GetValueOrDefault(player2Id);
-
-        int player1Xp = 24 + (player1PerfectRounds * 5);
-        int player2Xp = 24 + (player2PerfectRounds * 5);
-
-        if (!isTie)
-        {
-            if (winner == "Player1") player1Xp += 10;
-            else player2Xp += 10;
-        }
 
         const int maxRetries = 3;
         for (int attempt = 1; attempt <= maxRetries; attempt++)
