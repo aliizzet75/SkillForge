@@ -233,8 +233,14 @@ public class GameHub : Hub<IGameClient>
 
         _pendingChallenges[targetId] = challengerId;
 
-        var challengerInfo = _lobbyPlayers.TryGetValue(challengerId, out var ci) ? ci : ("Unknown", "🧙‍♀️");
-        await Clients.Client(targetId).ChallengeReceived(challengerInfo.Name, challengerInfo.Avatar);
+        string challengerName = "Unknown";
+        string challengerAvatar = "🧙‍♀️";
+        if (_lobbyPlayers.TryGetValue(challengerId, out var ci))
+        {
+            challengerName = ci.Name;
+            challengerAvatar = ci.Avatar;
+        }
+        await Clients.Client(targetId).ChallengeReceived(challengerName, challengerAvatar);
     }
 
     public async Task AcceptChallenge()
