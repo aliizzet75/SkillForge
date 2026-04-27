@@ -36,11 +36,11 @@ export default function RegisterForm() {
       return;
     }
 
-    const success = await register(username, email, password, avatar);
-    if (success) {
+    const result = await register(username, email, password, avatar);
+    if (result === true) {
       router.push('/lobby');
     } else {
-      setError('Registration failed. Please try again.');
+      setError(result);
     }
   };
 
