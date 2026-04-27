@@ -256,37 +256,6 @@ namespace SkillForge.Api.Controllers
             }
         }
 
-        /// <summary>
-        /// Get current authenticated user
-        /// </summary>
-        [HttpGet("me")]
-        public async Task<ActionResult> GetCurrentUser()
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
-            {
-                return Unauthorized();
-            }
-
-            var user = await _context.Users.FindAsync(int.Parse(userId));
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            return Ok(new
-            {
-                Id = user.Id,
-                Username = user.Username,
-                DisplayName = user.DisplayName,
-                Email = user.Email,
-                Avatar = user.Avatar,
-                TotalXp = user.TotalXp,
-                CurrentLevel = user.CurrentLevel,
-                CountryCode = user.CountryCode
-            });
-        }
-
         private string GenerateJwtToken(User user)
         {
             var jwtSettings = _configuration.GetSection("Jwt");
