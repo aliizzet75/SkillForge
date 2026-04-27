@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.StateMachine;
 using SkillForge.Core.Models;
 using SkillForge.Games;
@@ -691,48 +692,35 @@ return false
             user.CurrentLevel = (user.TotalXp / 100) + 1;
         }
 
-        // Update skill-specific XP and recalculate percentile
+        // Update UserSkill for skill-specific type and "overall"
         var skillType = gameType == 1 ? "memory" : "overall";
-        var userSkill = await db.UserSkills
-            .FirstOrDefaultAsync(us => us.UserId == userGuid && us.SkillType == skillType);
-        
-        if (userSkill != null)
+        foreach (var st in new[] { skillType, "overall" }.Distinct())
         {
-            userSkill.XP += xpEarned;
-            userSkill.GamesPlayed++;
-            if (won) userSkill.GamesWon++;
-            
-            // Recalculate percentile
-            var currentXp = userSkill.XP;
-            var playersBelow = await db.UserSkills
-                .Where(us => us.SkillType == skillType && us.XP < currentXp)
-                .CountAsync();
-            var totalPlayers = await db.UserSkills
-                .Where(us => us.SkillType == skillType)
-                .CountAsync();
-            
-            userSkill.Percentile = totalPlayers == 0 ? 100 : (int)((double)playersBelow / totalPlayers * 100);
-        }
-        else
-        {
-            // Create new skill entry with initial percentile
-            var playersBelow = await db.UserSkills
-                .Where(us => us.SkillType == skillType && us.XP < xpEarned)
-                .CountAsync();
-            var totalPlayers = await db.UserSkills
-                .Where(us => us.SkillType == skillType)
-                .CountAsync();
-            var percentile = totalPlayers == 0 ? 100 : (int)((double)playersBelow / (totalPlayers + 1) * 100);
-            
-            db.UserSkills.Add(new UserSkill
+            var skill = await db.UserSkills.FirstOrDefaultAsync(s => s.UserId == userGuid && s.SkillType == st);
+            if (skill == null)
             {
-                UserId = userGuid,
-                SkillType = skillType,
-                XP = xpEarned,
-                Level = 1,
-                Percentile = percentile,
-                GamesPlayed = 1,
-                GamesWon = won ? 1 : 0
+                skill = new UserSkill { UserId = userGuid, SkillType = st };
+                db.UserSkills.Add(skill);
+            }
+            skill.XP          += xpEarned;
+            skill.Level        = (skill.XP / 100) + 1;
+            skill.GamesPlayed += 1;
+            if (won) skill.GamesWon += 1;
+            skill.LastUpdated  = DateTime.UtcNow;
+
+            // Percentile: excludes current user so denominator is correct for new and existing users.
+            var otherPlayers = await db.UserSkills.CountAsync(s => s.SkillType == st && s.UserId != userGuid);
+            var lowerPlayers = await db.UserSkills.CountAsync(s => s.SkillType == st && s.UserId != userGuid && s.XP < skill.XP);
+            skill.Percentile  = otherPlayers > 0 ? Math.Round((decimal)lowerPlayers / otherPlayers * 100, 2) : 50m;
+
+            db.SkillSnapshots.Add(new SkillSnapshot
+            {
+                UserId     = userGuid,
+                SkillType  = st,
+                XP         = skill.XP,
+                Level      = skill.Level,
+                Percentile = skill.Percentile,
+                RecordedAt = DateTime.UtcNow
             });
         }
 

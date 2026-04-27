@@ -25,24 +25,25 @@ public class LeaderboardController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var cacheKey = $"leaderboard_global_{skillType}_{page}_{pageSize}";
-        
         if (_cache.TryGetValue(cacheKey, out var cachedResult))
-        {
             return Ok(cachedResult);
-        }
 
-        var query = _context.UserSkills
+        var baseQuery = _context.UserSkills
             .Where(us => us.SkillType == skillType)
-            .OrderByDescending(us => us.Percentile)
-            .ThenByDescending(us => us.XP)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize);
+            .OrderByDescending(us => us.XP)
+            .ThenByDescending(us => us.GamesPlayed);
 
-        var users = await query
+        var totalCount = await baseQuery.CountAsync();
+
+        var users = await baseQuery
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(us => new
             {
-                rank = 0,
                 userId = us.UserId,
                 username = us.User.Username,
                 avatar = us.User.Avatar,
@@ -56,7 +57,6 @@ public class LeaderboardController : ControllerBase
             })
             .ToListAsync();
 
-        // Calculate ranks
         var startRank = (page - 1) * pageSize + 1;
         var rankedUsers = users.Select((u, i) => new
         {
@@ -78,11 +78,12 @@ public class LeaderboardController : ControllerBase
             skillType,
             page,
             pageSize,
+            totalCount,
+            totalPages = (int)Math.Ceiling((double)totalCount / pageSize),
             users = rankedUsers
         };
 
         _cache.Set(cacheKey, result, TimeSpan.FromMinutes(CacheExpirationMinutes));
-
         return Ok(result);
     }
 
@@ -93,25 +94,27 @@ public class LeaderboardController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var cacheKey = $"leaderboard_country_{countryCode.ToUpper()}_{skillType}_{page}_{pageSize}";
-        
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var normalizedCountry = countryCode.ToUpper();
+
+        var cacheKey = $"leaderboard_country_{normalizedCountry}_{skillType}_{page}_{pageSize}";
         if (_cache.TryGetValue(cacheKey, out var cachedResult))
-        {
             return Ok(cachedResult);
-        }
 
-        var query = _context.UserSkills
+        var baseQuery = _context.UserSkills
             .Where(us => us.SkillType == skillType)
-            .Where(us => us.User.CountryCode == countryCode.ToUpper())
-            .OrderByDescending(us => us.Percentile)
-            .ThenByDescending(us => us.XP)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize);
+            .Where(us => us.User.CountryCode == normalizedCountry)
+            .OrderByDescending(us => us.XP)
+            .ThenByDescending(us => us.GamesPlayed);
 
-        var users = await query
+        var totalCount = await baseQuery.CountAsync();
+
+        var users = await baseQuery
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(us => new
             {
-                rank = 0,
                 userId = us.UserId,
                 username = us.User.Username,
                 avatar = us.User.Avatar,
@@ -124,7 +127,6 @@ public class LeaderboardController : ControllerBase
             })
             .ToListAsync();
 
-        // Calculate ranks
         var startRank = (page - 1) * pageSize + 1;
         var rankedUsers = users.Select((u, i) => new
         {
@@ -142,15 +144,16 @@ public class LeaderboardController : ControllerBase
 
         var result = new
         {
-            countryCode = countryCode.ToUpper(),
+            countryCode = normalizedCountry,
             skillType,
             page,
             pageSize,
+            totalCount,
+            totalPages = (int)Math.Ceiling((double)totalCount / pageSize),
             users = rankedUsers
         };
 
         _cache.Set(cacheKey, result, TimeSpan.FromMinutes(CacheExpirationMinutes));
-
         return Ok(result);
     }
 
@@ -218,7 +221,7 @@ public class LeaderboardController : ControllerBase
     {
         // Same as global but explicitly for a specific skill type
         var cacheKey = $"leaderboard_skill_{skillType}_{page}_{pageSize}";
-        
+
         if (_cache.TryGetValue(cacheKey, out var cachedResult))
         {
             return Ok(cachedResult);
