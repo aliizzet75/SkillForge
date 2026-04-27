@@ -22,6 +22,9 @@ builder.Services.AddDbContext<SkillForgeDbContext>(options =>
 // Add JWT service
 builder.Services.AddScoped<SkillForge.Core.Services.IJwtService, SkillForge.Core.Services.JwtService>();
 
+// Add email service
+builder.Services.AddTransient<SkillForge.Api.Services.IEmailService, SkillForge.Api.Services.SmtpEmailService>();
+
 // Add JWT Bearer authentication so [Authorize] attributes work on API controllers
 var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT Key is missing. Set JWT_KEY env var or Jwt:Key config.");
@@ -49,13 +52,16 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter("forgot-password", config =>
-    {
-        config.PermitLimit = 3;
-        config.Window = TimeSpan.FromMinutes(15);
-        config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        config.QueueLimit = 0;
-    });
+    options.AddPolicy("forgot-password", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 3,
+                Window = TimeSpan.FromMinutes(15),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0
+            }));
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 

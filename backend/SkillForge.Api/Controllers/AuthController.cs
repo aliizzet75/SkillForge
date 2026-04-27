@@ -9,6 +9,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
+using SkillForge.Api.Services;
 
 namespace SkillForge.Api.Controllers;
 
@@ -19,12 +21,14 @@ public class AuthController : ControllerBase
     private readonly SkillForgeDbContext _context;
     private readonly IJwtService _jwtService;
     private readonly IConfiguration _configuration;
+    private readonly IEmailService _emailService;
 
-    public AuthController(SkillForgeDbContext context, IJwtService jwtService, IConfiguration configuration)
+    public AuthController(SkillForgeDbContext context, IJwtService jwtService, IConfiguration configuration, IEmailService emailService)
     {
         _context = context;
         _jwtService = jwtService;
         _configuration = configuration;
+        _emailService = emailService;
     }
 
     [HttpPost("register")]
@@ -89,7 +93,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var input = request.Username;
+        var input = request.UsernameOrEmail;
         var user = await _context.Users
             .Include(u => u.Skills)
             .FirstOrDefaultAsync(u => u.Username == input || u.Email == input);
@@ -171,7 +175,15 @@ public class AuthController : ControllerBase
             user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1);
             user.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-            // TODO: send reset email with link to /reset-password?token={token}
+
+            var baseUrl = _configuration["App:BaseUrl"] ?? "http://localhost:3000";
+            var resetUrl = $"{baseUrl}/reset-password?token={token}";
+            await _emailService.SendAsync(
+                user.Email,
+                "Reset your SkillForge password",
+                $"<p>Click the link below to reset your password. The link expires in 1 hour.</p>" +
+                $"<p><a href=\"{resetUrl}\">{resetUrl}</a></p>" +
+                $"<p>If you did not request a password reset, you can ignore this email.</p>");
         }
         return Ok(new { message = "If that email is registered, you will receive a password reset link shortly." });
     }
@@ -244,6 +256,7 @@ public class ResetPasswordRequest
 
 public class LoginRequest
 {
-    public string Username { get; set; } = string.Empty;
+    [JsonPropertyName("username")]
+    public string UsernameOrEmail { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
 }
