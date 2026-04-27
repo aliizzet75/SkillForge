@@ -14,11 +14,6 @@ public class UpdateAvatarRequest
     public string Avatar { get; set; } = "🧙‍♀️";
 }
 
-internal static class AllowedAvatars
-{
-    internal static readonly HashSet<string> Values = ["🧙‍♀️", "🧙‍♂️", "🦸‍♀️", "🦸‍♂️", "👩‍🔬", "👨‍🔬", "🧚‍♀️", "🧚‍♂️", "👩‍🚀", "👨‍🚀"];
-}
-
 [ApiController]
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
