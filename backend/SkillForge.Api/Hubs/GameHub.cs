@@ -725,6 +725,17 @@ return false
         }
 
         await db.SaveChangesAsync();
+
+        // Refresh leaderboard view asynchronously — fire and forget, non-blocking
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_leaderboard");
+            }
+            catch { /* view refresh is best-effort */ }
+        });
     }
 }
 

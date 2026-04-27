@@ -21,6 +21,7 @@ builder.Services.AddScoped<SkillForge.Core.Services.IJwtService, SkillForge.Core
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<SkillForge.Api.Services.IUserContextAccessor, SkillForge.Api.Services.HttpUserContextAccessor>();
 
+builder.Services.AddMemoryCache();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
