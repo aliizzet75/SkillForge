@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Core.Models;
 using SkillForge.Core.Services;
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -87,7 +89,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var input = request.UsernameOrEmail;
+        var input = request.Username;
         var user = await _context.Users
             .Include(u => u.Skills)
             .FirstOrDefaultAsync(u => u.Username == input || u.Email == input);
@@ -157,27 +159,29 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("forgot-password")]
+    [EnableRateLimiting("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
-        if (user == null)
-            return Ok(new { message = "If that email exists, a reset link has been generated." });
-
-        var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
-            .Replace("+", "-").Replace("/", "_").Replace("=", "");
-        user.PasswordResetToken = token;
-        user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1);
-        user.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-
-        var frontendUrl = _configuration["Frontend:Url"] ?? "http://187.124.28.216:3001";
-        var resetLink = $"{frontendUrl}/reset-password?token={token}";
-        return Ok(new { message = "Reset link generated.", resetLink });
+        if (user != null)
+        {
+            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+                .Replace("+", "-").Replace("/", "_").Replace("=", "");
+            user.PasswordResetToken = token;
+            user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1);
+            user.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            // TODO: send reset email with link to /reset-password?token={token}
+        }
+        return Ok(new { message = "If that email is registered, you will receive a password reset link shortly." });
     }
 
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
+        if (request.NewPassword.Length < 8)
+            return BadRequest(new { error = "Password must be at least 8 characters." });
+
         var user = await _context.Users.FirstOrDefaultAsync(u =>
             u.PasswordResetToken == request.Token &&
             u.PasswordResetTokenExpiry > DateTime.UtcNow);
@@ -234,6 +238,7 @@ public class ForgotPasswordRequest
 public class ResetPasswordRequest
 {
     public string Token { get; set; } = string.Empty;
+    [MinLength(8)]
     public string NewPassword { get; set; } = string.Empty;
 }
 
@@ -241,6 +246,4 @@ public class LoginRequest
 {
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
-    public string? Email { get; set; }
-    public string UsernameOrEmail => !string.IsNullOrEmpty(Username) ? Username : (Email ?? string.Empty);
 }
