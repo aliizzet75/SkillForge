@@ -25,8 +25,8 @@ export default function UserMenu() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg transition-colors"
       >
-        <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold">
-          {user.username.charAt(0).toUpperCase()}
+        <div className="w-8 h-8 flex items-center justify-center text-2xl">
+          {user.avatar || user.username.charAt(0).toUpperCase()}
         </div>
         <div className="text-left hidden sm:block">
           <p className="text-white font-medium text-sm">{user.username}</p>
@@ -58,7 +58,14 @@ export default function UserMenu() {
               className="block px-4 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
               onClick={() => setIsOpen(false)}
             >
-              Profile
+              👤 Profil
+            </Link>
+            <Link
+              href="/settings"
+              className="block px-4 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              ⚙️ Einstellungen
             </Link>
             <button
               onClick={() => {

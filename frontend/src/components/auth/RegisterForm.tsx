@@ -5,11 +5,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+const AVATARS = ['🧙‍♀️', '🧙‍♂️', '🦸‍♀️', '🦸‍♂️', '👩‍🔬', '👨‍🔬', '🧚‍♀️', '🧚‍♂️', '👩‍🚀', '👨‍🚀'];
+
 export default function RegisterForm() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [avatar, setAvatar] = useState('🧙‍♀️');
   const [error, setError] = useState('');
   const { register, isLoading } = useAuth();
   const router = useRouter();
@@ -33,7 +36,7 @@ export default function RegisterForm() {
       return;
     }
 
-    const success = await register(username, email, password);
+    const success = await register(username, email, password, avatar);
     if (success) {
       router.push('/lobby');
     } else {
@@ -48,6 +51,24 @@ export default function RegisterForm() {
           {error}
         </div>
       )}
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Wähle deinen Avatar
+        </label>
+        <div className="grid grid-cols-5 gap-2">
+          {AVATARS.map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => setAvatar(a)}
+              className={`p-2 text-2xl rounded-lg transition-all ${avatar === a ? 'bg-purple-600 ring-2 ring-purple-400' : 'bg-white/10 hover:bg-white/20'}`}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div>
         <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-1">

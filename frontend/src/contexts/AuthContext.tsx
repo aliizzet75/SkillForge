@@ -6,6 +6,7 @@ interface User {
   id: string;
   username: string;
   email: string;
+  avatar: string;
   currentLevel: number;
   totalXp: number;
 }
@@ -15,7 +16,8 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (username: string, email: string, password: string) => Promise<boolean>;
+  register: (username: string, email: string, password: string, avatar?: string) => Promise<boolean>;
+  updateAvatar: (avatar: string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
+        if (userData.avatar) localStorage.setItem('avatar', userData.avatar);
       } else {
         // Token invalid, clear it
         localStorage.removeItem('token');
@@ -79,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json();
       localStorage.setItem('token', data.token);
+      if (data.user?.avatar) localStorage.setItem('avatar', data.user.avatar);
       setToken(data.token);
       setUser(data.user);
       return true;
@@ -90,13 +94,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (username: string, email: string, password: string): Promise<boolean> => {
+  const register = async (username: string, email: string, password: string, avatar?: string): Promise<boolean> => {
     try {
       setIsLoading(true);
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password })
+        body: JSON.stringify({ username, email, password, avatar: avatar ?? '🧙‍♀️' })
       });
 
       if (!response.ok) {
@@ -106,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json();
       localStorage.setItem('token', data.token);
+      if (data.user?.avatar) localStorage.setItem('avatar', data.user.avatar);
       setToken(data.token);
       setUser(data.user);
       return true;
@@ -117,8 +122,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateAvatar = async (avatar: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const response = await fetch(`${API_URL}/api/users/${user.id}/avatar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ avatar })
+      });
+      if (!response.ok) return false;
+      setUser({ ...user, avatar });
+      localStorage.setItem('avatar', avatar);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('avatar');
     setToken(null);
     setUser(null);
   };
@@ -130,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       register,
+      updateAvatar,
       logout,
       isAuthenticated: !!token
     }}>
