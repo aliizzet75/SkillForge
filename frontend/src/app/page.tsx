@@ -264,12 +264,20 @@ export default function Home() {
             </div>
           </div>
 
-          <button
-            onClick={handlePlayAgain}
-            className="w-full py-4 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl transition-all"
-          >
-            🔄 Nochmal spielen
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handlePlayAgain}
+              className="flex-1 py-4 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl transition-all"
+            >
+              🔄 Nochmal
+            </button>
+            <a
+              href="/profile"
+              className="flex-1 py-4 px-6 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all text-center"
+            >
+              👤 Profil
+            </a>
+          </div>
         </div>
       </div>
     );

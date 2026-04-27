@@ -101,6 +101,84 @@ public class UsersController : ControllerBase
         return Ok(new { userId = id, skillType, days, snapshots });
     }
 
+    [HttpGet("{id:guid}/insights")]
+    public async Task<IActionResult> GetInsights(Guid id)
+    {
+        var user = await _context.Users.FindAsync(id);
+        if (user == null)
+            return NotFound(new { error = "User not found" });
+
+        var now = DateTime.UtcNow;
+        var oneWeekAgo = now.AddDays(-7);
+        var twoWeeksAgo = now.AddDays(-14);
+
+        var insights = new List<object>();
+
+        foreach (var skillType in new[] { "overall", "memory" })
+        {
+            var thisWeek = await _context.SkillSnapshots
+                .Where(ss => ss.UserId == id && ss.SkillType == skillType && ss.RecordedAt >= oneWeekAgo)
+                .OrderBy(ss => ss.RecordedAt)
+                .ToListAsync();
+
+            var lastWeek = await _context.SkillSnapshots
+                .Where(ss => ss.UserId == id && ss.SkillType == skillType && ss.RecordedAt >= twoWeeksAgo && ss.RecordedAt < oneWeekAgo)
+                .OrderBy(ss => ss.RecordedAt)
+                .ToListAsync();
+
+            if (thisWeek.Count == 0) continue;
+
+            var xpThisWeek = thisWeek.Last().XP - (thisWeek.First().XP - (thisWeek.FirstOrDefault()?.XP ?? 0));
+            var xpGainedThisWeek = thisWeek.Count > 1 ? thisWeek.Last().XP - thisWeek.First().XP : 0;
+            var xpGainedLastWeek = lastWeek.Count > 1 ? lastWeek.Last().XP - lastWeek.First().XP : 0;
+
+            var percentileStart = thisWeek.First().Percentile;
+            var percentileEnd = thisWeek.Last().Percentile;
+            var percentileChange = percentileEnd - percentileStart;
+
+            string? message = null;
+            if (xpGainedLastWeek > 0 && xpGainedThisWeek > 0)
+            {
+                var changePercent = (int)Math.Round((double)(xpGainedThisWeek - xpGainedLastWeek) / xpGainedLastWeek * 100);
+                var skillLabel = skillType == "memory" ? "Memory" : "Gesamt";
+                if (Math.Abs(changePercent) >= 5)
+                    message = changePercent > 0
+                        ? $"Dein {skillLabel}-Skill hat sich diese Woche um {changePercent}% verbessert"
+                        : $"Dein {skillLabel}-Skill war diese Woche {Math.Abs(changePercent)}% schwächer als letzte Woche";
+            }
+            else if (xpGainedThisWeek > 0)
+            {
+                var skillLabel = skillType == "memory" ? "Memory" : "Gesamt";
+                message = $"+{xpGainedThisWeek} XP diese Woche in {skillLabel}";
+            }
+
+            if (message != null)
+                insights.Add(new { skillType, message, xpGained = xpGainedThisWeek, percentileChange });
+        }
+
+        // Streak: count consecutive days with at least one snapshot
+        var recentDays = await _context.SkillSnapshots
+            .Where(ss => ss.UserId == id && ss.RecordedAt >= now.AddDays(-30))
+            .Select(ss => ss.RecordedAt.Date)
+            .Distinct()
+            .OrderByDescending(d => d)
+            .ToListAsync();
+
+        int streak = 0;
+        var checkDay = now.Date;
+        foreach (var day in recentDays)
+        {
+            if (day == checkDay || day == checkDay.AddDays(-1))
+            {
+                streak++;
+                checkDay = day;
+            }
+            else break;
+        }
+
+        return Ok(new { userId = id, insights, streakDays = streak });
+    }
+
     [HttpGet("online")]
     public async Task<IActionResult> GetOnlineUsers([FromQuery] int limit = 20)
     {
