@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Core.Models;
 using SkillForge.Core.Services;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -40,7 +42,8 @@ public class AuthController : ControllerBase
             Email = request.Email,
             PasswordHash = HashPassword(request.Password),
             CountryCode = request.CountryCode,
-            Timezone = request.Timezone
+            Timezone = request.Timezone,
+            Avatar = request.Avatar ?? "🧙‍♀️"
         };
 
         _context.Users.Add(user);
@@ -61,11 +64,19 @@ public class AuthController : ControllerBase
         }
         await _context.SaveChangesAsync();
 
+        var token = _jwtService.GenerateJwtToken(user);
         return Ok(new
         {
-            id = user.Id,
-            username = user.Username,
-            message = "User registered successfully"
+            token,
+            user = new
+            {
+                id = user.Id,
+                username = user.Username,
+                email = user.Email,
+                avatar = user.Avatar,
+                currentLevel = user.CurrentLevel,
+                totalXp = user.TotalXp
+            }
         });
     }
 
@@ -88,13 +99,16 @@ public class AuthController : ControllerBase
         
         return Ok(new
         {
-            token = token,
+            token,
             user = new
             {
                 id = user.Id,
                 username = user.Username,
                 email = user.Email,
+                avatar = user.Avatar ?? "🧙‍♀️",
                 countryCode = user.CountryCode,
+                currentLevel = user.CurrentLevel,
+                totalXp = user.TotalXp,
                 skills = user.Skills.Select(s => new
                 {
                     type = s.SkillType,
@@ -103,6 +117,27 @@ public class AuthController : ControllerBase
                     percentile = s.Percentile
                 })
             }
+        });
+    }
+
+    [Authorize]
+    [HttpGet("me")]
+    public async Task<IActionResult> Me()
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(userId, out var guid)) return Unauthorized();
+
+        var user = await _context.Users.FindAsync(guid);
+        if (user == null) return NotFound();
+
+        return Ok(new
+        {
+            id = user.Id,
+            username = user.Username,
+            email = user.Email,
+            avatar = user.Avatar ?? "🧙‍♀️",
+            currentLevel = user.CurrentLevel,
+            totalXp = user.TotalXp
         });
     }
 
@@ -135,6 +170,7 @@ public class RegisterRequest
     public string Password { get; set; } = string.Empty;
     public string? CountryCode { get; set; }
     public string? Timezone { get; set; }
+    public string? Avatar { get; set; }
 }
 
 public class LoginRequest

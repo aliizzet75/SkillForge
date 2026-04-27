@@ -7,6 +7,11 @@ using System.Security.Claims;
 
 namespace SkillForge.Api.Controllers;
 
+public class UpdateAvatarRequest
+{
+    public string Avatar { get; set; } = "🧙‍♀️";
+}
+
 [ApiController]
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
@@ -183,6 +188,22 @@ public class UsersController : ControllerBase
         }
 
         return Ok(new { userId = id, insights, streakDays = streak });
+    }
+
+    [Authorize]
+    [HttpPatch("{id:guid}/avatar")]
+    public async Task<IActionResult> UpdateAvatar(Guid id, [FromBody] UpdateAvatarRequest request)
+    {
+        var callerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (callerId == null || !Guid.TryParse(callerId, out var callerGuid) || callerGuid != id)
+            return Forbid();
+
+        var user = await _context.Users.FindAsync(id);
+        if (user == null) return NotFound(new { error = "User not found" });
+
+        user.Avatar = request.Avatar;
+        await _context.SaveChangesAsync();
+        return Ok(new { avatar = user.Avatar });
     }
 
     [HttpGet("online")]

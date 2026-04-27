@@ -10,6 +10,7 @@ export default function Home() {
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [challengeSent, setChallengeSent] = useState<string | null>(null);
   const [selectedGameType, setSelectedGameType] = useState<number>(1);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const {
     user,
@@ -32,9 +33,23 @@ export default function Home() {
     setIncomingChallenge,
   } = useGameStore();
 
-  // Initialize SignalR on mount
+  // Initialize SignalR on mount; pre-fill name+avatar from stored profile
   useEffect(() => {
     initializeSignalR();
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      const storedAvatar = localStorage.getItem('avatar');
+      if (token) {
+        setIsLoggedIn(true);
+        if (storedAvatar) setAvatar(storedAvatar);
+        // fetch username from /api/auth/me
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+        fetch(`${apiUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => { if (data?.username) setPlayerName(data.username); if (data?.avatar) { setAvatar(data.avatar); localStorage.setItem('avatar', data.avatar); } })
+          .catch(() => {});
+      }
+    }
   }, []);
 
   const handleEnterLobby = async () => {
@@ -420,7 +435,7 @@ export default function Home() {
     );
   }
 
-  // Login Screen
+  // Start Screen
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4">
       <div className="max-w-md w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
@@ -429,53 +444,81 @@ export default function Home() {
         <BuildTimestamp />
 
         <div className="space-y-4">
-          <div>
-            <label className="block text-white/80 mb-2 text-sm">Dein Name</label>
-            <input
-              type="text"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              placeholder="Max Mustermann"
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-white/80 mb-2 text-sm">Wähle deinen Avatar</label>
-            <div className="grid grid-cols-5 gap-2">
-              {['🧙‍♀️', '🧙‍♂️', '🦸‍♀️', '🦸‍♂️', '👩‍🔬', '👨‍🔬', '🧚‍♀️', '🧚‍♂️', '👩‍🚀', '👨‍🚀'].map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setAvatar(a)}
-                  className={`
-                    p-2 text-2xl rounded-lg transition-all
-                    ${avatar === a ? 'bg-indigo-600' : 'bg-white/10 hover:bg-white/20'}
-                  `}
-                >
-                  {a}
-                </button>
-              ))}
+          {isLoggedIn ? (
+            /* Logged-in: show profile summary, no avatar picker */
+            <div className="flex items-center gap-4 bg-white/10 rounded-xl p-4">
+              <span className="text-5xl">{avatar}</span>
+              <div className="flex-1">
+                <p className="text-white font-bold text-lg">{playerName || '…'}</p>
+                <a href="/settings" className="text-indigo-400 text-xs hover:text-indigo-300">
+                  ⚙️ Avatar ändern
+                </a>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Guest: name input + avatar picker */
+            <>
+              <div>
+                <label className="block text-white/80 mb-2 text-sm">Dein Name</label>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Max Mustermann"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder:text-white/40 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-white/80 mb-2 text-sm">Wähle deinen Avatar</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {['🧙‍♀️', '🧙‍♂️', '🦸‍♀️', '🦸‍♂️', '👩‍🔬', '👨‍🔬', '🧚‍♀️', '🧚‍♂️', '👩‍🚀', '👨‍🚀'].map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => setAvatar(a)}
+                      className={`p-2 text-2xl rounded-lg transition-all ${avatar === a ? 'bg-indigo-600' : 'bg-white/10 hover:bg-white/20'}`}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           <button
             onClick={handleEnterLobby}
             disabled={!playerName.trim() || !isConnected}
-            className="w-full py-4 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all transform hover:scale-[1.02] mt-6"
+            className="w-full py-4 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all transform hover:scale-[1.02] mt-2"
           >
             {isConnected ? 'Lobby betreten →' : 'Verbinde...'}
           </button>
 
           <div className="border-t border-white/10 pt-4 flex gap-3">
-            <a href="/login" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
-              🔑 Einloggen
-            </a>
-            <a href="/register" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
-              📝 Registrieren
-            </a>
-            <a href="/leaderboard" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
-              🏆 Leaderboard
-            </a>
+            {isLoggedIn ? (
+              <>
+                <a href="/settings" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+                  ⚙️ Einstellungen
+                </a>
+                <a href="/leaderboard" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+                  🏆 Leaderboard
+                </a>
+                <a href="/profile" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+                  👤 Profil
+                </a>
+              </>
+            ) : (
+              <>
+                <a href="/login" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+                  🔑 Einloggen
+                </a>
+                <a href="/register" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+                  📝 Registrieren
+                </a>
+                <a href="/leaderboard" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+                  🏆 Leaderboard
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>
