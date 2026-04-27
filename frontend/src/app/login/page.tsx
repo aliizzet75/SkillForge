@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FcGoogle } from 'react-icons/fc';
-import { FaFacebook, FaUserSecret } from 'react-icons/fa';
+import { FaUserSecret } from 'react-icons/fa';
 import LoginForm from '@/components/auth/LoginForm';
 
 function LoginPageContent() {
@@ -73,34 +72,6 @@ function LoginPageContent() {
           </>
         ) : (
           <div className="space-y-4">
-            {/* Social Login */}
-            <button
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
-            >
-              <FcGoogle className="text-xl" />
-              Continue with Google
-            </button>
-
-            <button
-              onClick={handleFacebookLogin}
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-3 bg-[#1877F2] text-white font-semibold py-3 px-4 rounded-lg hover:bg-[#166fe5] transition-colors disabled:opacity-50"
-            >
-              <FaFacebook className="text-xl" />
-              Continue with Facebook
-            </button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/20"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-transparent text-gray-400">or</span>
-              </div>
-            </div>
-
             {/* Email Login */}
             <button
               onClick={() => setShowEmailForm(true)}
