@@ -1,16 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useGameStore, initializeSignalR, enterLobby, playRandom, cancelMatchmaking, challengePlayer, acceptChallenge, declineChallenge, submitAnswer, leaveLobby } from '@/store/gameStore';
 import BuildTimestamp from './BuildTimestamp';
 
 export default function Home() {
+  const router = useRouter();
   const [playerName, setPlayerName] = useState('');
   const [avatar, setAvatar] = useState('🧙‍♀️');
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [challengeSent, setChallengeSent] = useState<string | null>(null);
   const [selectedGameType, setSelectedGameType] = useState<number>(1);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // Initialize synchronously from localStorage to avoid flash of guest screen
+  const [isLoggedIn, setIsLoggedIn] = useState(() =>
+    typeof window !== 'undefined' && !!localStorage.getItem('token')
+  );
 
   const {
     user,
@@ -33,21 +38,17 @@ export default function Home() {
     setIncomingChallenge,
   } = useGameStore();
 
-  // Initialize SignalR on mount; pre-fill name+avatar from stored profile
+  // On mount: if token exists, redirect to lobby; otherwise init SignalR for guest play
   useEffect(() => {
-    initializeSignalR();
     const token = localStorage.getItem('token');
-    const storedAvatar = localStorage.getItem('avatar');
     if (token) {
-      setIsLoggedIn(true);
-      if (storedAvatar) setAvatar(storedAvatar);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-      fetch(`${apiUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data?.username) setPlayerName(data.username); if (data?.avatar) { setAvatar(data.avatar); localStorage.setItem('avatar', data.avatar); } })
-        .catch(() => {});
+      router.replace('/lobby');
+      return;
     }
-  }, []);
+    initializeSignalR();
+    const storedAvatar = localStorage.getItem('avatar');
+    if (storedAvatar) setAvatar(storedAvatar);
+  }, [router]);
 
   const handleEnterLobby = async () => {
     if (!playerName.trim()) return;
