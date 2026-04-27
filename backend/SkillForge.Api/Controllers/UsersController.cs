@@ -14,7 +14,7 @@ public class UpdateAvatarRequest
     public string Avatar { get; set; } = "🧙‍♀️";
 }
 
-file static class AllowedAvatars
+internal static class AllowedAvatars
 {
     internal static readonly HashSet<string> Values = ["🧙‍♀️", "🧙‍♂️", "🦸‍♀️", "🦸‍♂️", "👩‍🔬", "👨‍🔬", "🧚‍♀️", "🧚‍♂️", "👩‍🚀", "👨‍🚀"];
 }

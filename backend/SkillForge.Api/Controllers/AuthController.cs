@@ -36,6 +36,11 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "Email already exists" });
         }
 
+        if (request.Avatar != null && !AllowedAvatars.Values.Contains(request.Avatar))
+        {
+            return BadRequest(new { error = "Invalid avatar" });
+        }
+
         var user = new User
         {
             Username = request.Username,
