@@ -692,7 +692,7 @@ return false
             user.CurrentLevel = (user.TotalXp / 100) + 1;
         }
 
-        // Update UserSkill for "memory" (gameType 1) and "overall"
+        // Update UserSkill for skill-specific type and "overall"
         var skillType = gameType == 1 ? "memory" : "overall";
         foreach (var st in new[] { skillType, "overall" }.Distinct())
         {
@@ -708,14 +708,11 @@ return false
             if (won) skill.GamesWon += 1;
             skill.LastUpdated  = DateTime.UtcNow;
 
-            // Percentile: fraction of other players with strictly lower XP.
-            // Query excludes current user so the denominator is always correct,
-            // even for new users whose row has not been saved yet.
+            // Percentile: excludes current user so denominator is correct for new and existing users.
             var otherPlayers = await db.UserSkills.CountAsync(s => s.SkillType == st && s.UserId != userGuid);
             var lowerPlayers = await db.UserSkills.CountAsync(s => s.SkillType == st && s.UserId != userGuid && s.XP < skill.XP);
             skill.Percentile  = otherPlayers > 0 ? Math.Round((decimal)lowerPlayers / otherPlayers * 100, 2) : 50m;
 
-            // Record snapshot for history/insights
             db.SkillSnapshots.Add(new SkillSnapshot
             {
                 UserId     = userGuid,
