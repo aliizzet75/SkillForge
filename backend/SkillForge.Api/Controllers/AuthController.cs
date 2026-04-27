@@ -16,11 +16,13 @@ public class AuthController : ControllerBase
 {
     private readonly SkillForgeDbContext _context;
     private readonly IJwtService _jwtService;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(SkillForgeDbContext context, IJwtService jwtService)
+    public AuthController(SkillForgeDbContext context, IJwtService jwtService, IConfiguration configuration)
     {
         _context = context;
         _jwtService = jwtService;
+        _configuration = configuration;
     }
 
     [HttpPost("register")]
@@ -154,6 +156,44 @@ public class AuthController : ControllerBase
         });
     }
 
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        if (user == null)
+            return Ok(new { message = "If that email exists, a reset link has been generated." });
+
+        var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+            .Replace("+", "-").Replace("/", "_").Replace("=", "");
+        user.PasswordResetToken = token;
+        user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(1);
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        var frontendUrl = _configuration["Frontend:Url"] ?? "http://187.124.28.216:3001";
+        var resetLink = $"{frontendUrl}/reset-password?token={token}";
+        return Ok(new { message = "Reset link generated.", resetLink });
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        var user = await _context.Users.FirstOrDefaultAsync(u =>
+            u.PasswordResetToken == request.Token &&
+            u.PasswordResetTokenExpiry > DateTime.UtcNow);
+
+        if (user == null)
+            return BadRequest(new { error = "Invalid or expired reset token." });
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.PasswordResetToken = null;
+        user.PasswordResetTokenExpiry = null;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Password updated successfully." });
+    }
+
     private string HashPassword(string password)
     {
         return BCrypt.Net.BCrypt.HashPassword(password);
@@ -184,6 +224,17 @@ public class RegisterRequest
     public string? CountryCode { get; set; }
     public string? Timezone { get; set; }
     public string? Avatar { get; set; }
+}
+
+public class ForgotPasswordRequest
+{
+    public string Email { get; set; } = string.Empty;
+}
+
+public class ResetPasswordRequest
+{
+    public string Token { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
 }
 
 public class LoginRequest

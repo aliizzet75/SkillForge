@@ -46,6 +46,11 @@ public class User
     public DateTime? LastSeenAt { get; set; }
     
     public bool IsActive { get; set; } = true;
+
+    [MaxLength(255)]
+    public string? PasswordResetToken { get; set; }
+
+    public DateTime? PasswordResetTokenExpiry { get; set; }
     
     // Navigation properties
     public ICollection<UserSkill> Skills { get; set; } = new List<UserSkill>();

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import UserMenu from '@/components/auth/UserMenu';
 import { 
   enterLobby, 
@@ -210,9 +210,5 @@ function LobbyPageContent() {
 }
 
 export default function LobbyPage() {
-  return (
-    <AuthProvider>
-      <LobbyPageContent />
-    </AuthProvider>
-  );
+  return <LobbyPageContent />;
 }

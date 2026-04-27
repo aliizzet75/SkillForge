@@ -75,12 +75,13 @@ export default function LoginForm() {
         {isLoading ? 'Logging in...' : 'Log In'}
       </button>
 
-      <p className="text-center text-sm text-gray-400">
-        Don't have an account?{' '}
-        <Link href="/register" className="text-purple-400 hover:text-purple-300">
-          Sign up
-        </Link>
-      </p>
+      <div className="flex justify-between text-sm text-gray-400">
+        <span>
+          Don't have an account?{' '}
+          <Link href="/register" className="text-purple-400 hover:text-purple-300">Sign up</Link>
+        </span>
+        <Link href="/forgot-password" className="text-purple-400 hover:text-purple-300">Forgot password?</Link>
+      </div>
     </form>
   );
 }
