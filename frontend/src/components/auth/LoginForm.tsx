@@ -9,8 +9,15 @@ export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login, isLoading } = useAuth();
+  const [loginAttempted, setLoginAttempted] = useState(false);
+  const { login, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (loginAttempted && isAuthenticated) {
+      router.push('/lobby');
+    }
+  }, [loginAttempted, isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +30,7 @@ export default function LoginForm() {
 
     const success = await login(email, password);
     if (success) {
-      router.push('/lobby');
+      setLoginAttempted(true);
     } else {
       setError('Invalid email or password');
     }
