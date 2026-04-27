@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 const AVATARS = ['🧙‍♀️', '🧙‍♂️', '🦸‍♀️', '🦸‍♂️', '👩‍🔬', '👨‍🔬', '🧚‍♀️', '🧚‍♂️', '👩‍🚀', '👨‍🚀'];
 
@@ -94,9 +94,5 @@ function SettingsContent() {
 }
 
 export default function SettingsPage() {
-  return (
-    <AuthProvider>
-      <SettingsContent />
-    </AuthProvider>
-  );
+  return <SettingsContent />;
 }
