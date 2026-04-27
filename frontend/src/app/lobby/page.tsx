@@ -70,23 +70,18 @@ function LobbyPageContent() {
           </div>
         </div>
 
-        {/* Leaderboard */}
-        <div className="mt-8 bg-white/10 backdrop-blur rounded-xl p-6 border border-white/20">
-          <h2 className="text-2xl font-bold text-white mb-4">🏆 Global Leaderboard</h2>
-          <div className="space-y-2">
-            {[1, 2, 3, 4, 5].map((rank) => (
-              <div key={rank} className="flex items-center gap-4 p-3 bg-white/5 rounded-lg">
-                <div className="w-8 text-center font-bold text-purple-400">
-                  #{rank}
-                </div>
-                <div className="w-10 h-10 bg-purple-600 rounded-full"></div>
-                <div className="flex-1 text-white">Player {rank}</div>
-                <div className="text-purple-400 font-bold">
-                  {10000 - rank * 500} XP
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* Leaderboard Link */}
+        <div className="mt-8">
+          <a
+            href="/leaderboard"
+            className="flex items-center justify-between bg-white/10 backdrop-blur rounded-xl p-5 border border-white/20 hover:bg-white/15 transition-all group"
+          >
+            <div>
+              <h2 className="text-xl font-bold text-white">🏆 Global Leaderboard</h2>
+              <p className="text-gray-400 text-sm mt-1">Sieh wer die besten Memory-Spieler sind</p>
+            </div>
+            <span className="text-white/40 group-hover:text-white/80 transition-colors text-xl">→</span>
+          </a>
         </div>
       </div>
     </div>

@@ -21,17 +21,21 @@ public class LeaderboardController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var query = _context.UserSkills
-            .Where(us => us.SkillType == skillType)
-            .OrderByDescending(us => us.Percentile)
-            .ThenByDescending(us => us.XP)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var users = await query
+        var baseQuery = _context.UserSkills
+            .Where(us => us.SkillType == skillType)
+            .OrderByDescending(us => us.XP)
+            .ThenByDescending(us => us.GamesPlayed);
+
+        var totalCount = await baseQuery.CountAsync();
+
+        var users = await baseQuery
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(us => new
             {
-                rank = 0, // Will be calculated
                 userId = us.UserId,
                 username = us.User.Username,
                 countryCode = us.User.CountryCode,
@@ -43,7 +47,6 @@ public class LeaderboardController : ControllerBase
             })
             .ToListAsync();
 
-        // Calculate ranks
         var startRank = (page - 1) * pageSize + 1;
         var rankedUsers = users.Select((u, i) => new
         {
@@ -63,6 +66,8 @@ public class LeaderboardController : ControllerBase
             skillType,
             page,
             pageSize,
+            totalCount,
+            totalPages = (int)Math.Ceiling((double)totalCount / pageSize),
             users = rankedUsers
         });
     }
@@ -73,15 +78,17 @@ public class LeaderboardController : ControllerBase
         [FromQuery] string skillType = "overall",
         [FromQuery] int limit = 20)
     {
+        limit = Math.Clamp(limit, 1, 100);
+        var normalizedCountry = countryCode.ToUpper();
+
         var users = await _context.UserSkills
             .Where(us => us.SkillType == skillType)
-            .Where(us => us.User.CountryCode == countryCode.ToUpper())
-            .OrderByDescending(us => us.Percentile)
-            .ThenByDescending(us => us.XP)
+            .Where(us => us.User.CountryCode == normalizedCountry)
+            .OrderByDescending(us => us.XP)
+            .ThenByDescending(us => us.GamesPlayed)
             .Take(limit)
             .Select(us => new
             {
-                rank = 0,
                 userId = us.UserId,
                 username = us.User.Username,
                 level = us.Level,
@@ -92,7 +99,6 @@ public class LeaderboardController : ControllerBase
             })
             .ToListAsync();
 
-        // Calculate ranks
         var rankedUsers = users.Select((u, i) => new
         {
             rank = i + 1,
@@ -107,8 +113,9 @@ public class LeaderboardController : ControllerBase
 
         return Ok(new
         {
-            countryCode = countryCode.ToUpper(),
+            countryCode = normalizedCountry,
             skillType,
+            totalCount = rankedUsers.Count(),
             users = rankedUsers
         });
     }

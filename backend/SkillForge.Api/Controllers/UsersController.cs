@@ -77,6 +77,30 @@ public class UsersController : ControllerBase
         }));
     }
 
+    [HttpGet("{id:guid}/skill-history")]
+    public async Task<IActionResult> GetSkillHistory(Guid id, [FromQuery] string skillType = "overall", [FromQuery] int days = 30)
+    {
+        var user = await _context.Users.FindAsync(id);
+        if (user == null)
+            return NotFound(new { error = "User not found" });
+
+        var since = DateTime.UtcNow.AddDays(-Math.Clamp(days, 1, 365));
+
+        var snapshots = await _context.SkillSnapshots
+            .Where(ss => ss.UserId == id && ss.SkillType == skillType && ss.RecordedAt >= since)
+            .OrderBy(ss => ss.RecordedAt)
+            .Select(ss => new
+            {
+                recordedAt = ss.RecordedAt,
+                xp = ss.XP,
+                level = ss.Level,
+                percentile = ss.Percentile
+            })
+            .ToListAsync();
+
+        return Ok(new { userId = id, skillType, days, snapshots });
+    }
+
     [HttpGet("online")]
     public async Task<IActionResult> GetOnlineUsers([FromQuery] int limit = 20)
     {

@@ -15,6 +15,7 @@ public class SkillForgeDbContext : DbContext
     public DbSet<GameSession> GameSessions => Set<GameSession>();
     public DbSet<GameRound> GameRounds => Set<GameRound>();
     public DbSet<MatchHistory> MatchHistories => Set<MatchHistory>();
+    public DbSet<SkillSnapshot> SkillSnapshots => Set<SkillSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -84,5 +85,9 @@ public class SkillForgeDbContext : DbContext
         modelBuilder.Entity<GameRound>()
             .Property(gr => gr.Player2Data)
             .HasColumnType("jsonb");
+
+        // SkillSnapshot index for fast history queries
+        modelBuilder.Entity<SkillSnapshot>()
+            .HasIndex(ss => new { ss.UserId, ss.SkillType, ss.RecordedAt });
     }
 }

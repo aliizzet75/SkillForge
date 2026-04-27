@@ -426,6 +426,9 @@ export default function Home() {
             <a href="/register" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
               📝 Registrieren
             </a>
+            <a href="/leaderboard" className="flex-1 py-2 text-center text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">
+              🏆 Leaderboard
+            </a>
           </div>
         </div>
       </div>

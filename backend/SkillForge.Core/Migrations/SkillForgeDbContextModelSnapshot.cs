@@ -283,10 +283,54 @@ namespace SkillForge.Core.Migrations
                     b.Navigation("Player2");
                 });
 
+            modelBuilder.Entity("SkillForge.Core.Models.SkillSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Percentile")
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("SkillType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("XP")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "SkillType", "RecordedAt");
+
+                    b.ToTable("SkillSnapshots");
+                });
+
             modelBuilder.Entity("SkillForge.Core.Models.UserSkill", b =>
                 {
                     b.HasOne("SkillForge.Core.Models.User", "User")
                         .WithMany("Skills")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SkillForge.Core.Models.SkillSnapshot", b =>
+                {
+                    b.HasOne("SkillForge.Core.Models.User", "User")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

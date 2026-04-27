@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.StateMachine;
 using SkillForge.Core.Models;
 using SkillForge.Games;
@@ -689,6 +690,41 @@ return false
             user.TotalXp     += xpEarned;
             user.UpdatedAt    = DateTime.UtcNow;
             user.CurrentLevel = (user.TotalXp / 100) + 1;
+        }
+
+        // Update UserSkill for "memory" (gameType 1) and "overall"
+        var skillType = gameType == 1 ? "memory" : "overall";
+        foreach (var st in new[] { skillType, "overall" }.Distinct())
+        {
+            var skill = await db.UserSkills.FirstOrDefaultAsync(s => s.UserId == userGuid && s.SkillType == st);
+            if (skill == null)
+            {
+                skill = new UserSkill { UserId = userGuid, SkillType = st };
+                db.UserSkills.Add(skill);
+            }
+            skill.XP          += xpEarned;
+            skill.Level        = (skill.XP / 100) + 1;
+            skill.GamesPlayed += 1;
+            if (won) skill.GamesWon += 1;
+            skill.LastUpdated  = DateTime.UtcNow;
+
+            // Percentile: fraction of other players with strictly lower XP.
+            // Query excludes current user so the denominator is always correct,
+            // even for new users whose row has not been saved yet.
+            var otherPlayers = await db.UserSkills.CountAsync(s => s.SkillType == st && s.UserId != userGuid);
+            var lowerPlayers = await db.UserSkills.CountAsync(s => s.SkillType == st && s.UserId != userGuid && s.XP < skill.XP);
+            skill.Percentile  = otherPlayers > 0 ? Math.Round((decimal)lowerPlayers / otherPlayers * 100, 2) : 50m;
+
+            // Record snapshot for history/insights
+            db.SkillSnapshots.Add(new SkillSnapshot
+            {
+                UserId     = userGuid,
+                SkillType  = st,
+                XP         = skill.XP,
+                Level      = skill.Level,
+                Percentile = skill.Percentile,
+                RecordedAt = DateTime.UtcNow
+            });
         }
 
         await db.SaveChangesAsync();
