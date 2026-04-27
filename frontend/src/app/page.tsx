@@ -9,6 +9,7 @@ export default function Home() {
   const [avatar, setAvatar] = useState('🧙‍♀️');
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [challengeSent, setChallengeSent] = useState<string | null>(null);
+  const [selectedGameType, setSelectedGameType] = useState<number>(1);
 
   const {
     user,
@@ -44,7 +45,7 @@ export default function Home() {
 
   const handlePlayRandom = async () => {
     setMatchmaking(true);
-    await playRandom();
+    await playRandom(selectedGameType);
   };
 
   const handleCancelMatchmaking = async () => {
@@ -53,7 +54,7 @@ export default function Home() {
 
   const handleChallengePlayer = async (targetName: string) => {
     setChallengeSent(targetName);
-    await challengePlayer(targetName);
+    await challengePlayer(targetName, selectedGameType);
   };
 
   const handleAcceptChallenge = async () => {
@@ -177,6 +178,25 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Game type selector */}
+              <div>
+                <p className="text-white/60 text-xs mb-2">Spielmodus wählen:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setSelectedGameType(1)}
+                    className={`py-2 px-3 rounded-lg text-sm font-semibold transition-all ${selectedGameType === 1 ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                  >
+                    🧠 Memory
+                  </button>
+                  <button
+                    onClick={() => setSelectedGameType(2)}
+                    className={`py-2 px-3 rounded-lg text-sm font-semibold transition-all ${selectedGameType === 2 ? 'bg-orange-600 text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                  >
+                    ⚡ Reaktion
+                  </button>
+                </div>
+              </div>
+
               <button
                 onClick={handlePlayRandom}
                 className="w-full py-4 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold rounded-xl transition-all transform hover:scale-[1.02]"
@@ -283,9 +303,10 @@ export default function Home() {
     );
   }
 
-  // Game Screen (Memory Colors)
+  // Game Screen
   if (isInGame && currentGame) {
-    const { data, round, totalRounds, opponentName } = currentGame;
+    const { data, round, totalRounds, opponentName, type: gameType } = currentGame;
+    const isSpeedGame = gameType === 2;
 
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4">
@@ -293,7 +314,7 @@ export default function Home() {
           {/* Header */}
           <div className="flex justify-between items-center mb-6 text-white">
             <div>
-              <span className="text-sm text-white/60">Runde {round}/{totalRounds}</span>
+              <span className="text-sm text-white/60">Runde {round}/{totalRounds} · {isSpeedGame ? '⚡ Reaktion' : '🧠 Memory'}</span>
               <h2 className="text-xl font-bold">Gegner: {opponentName}</h2>
             </div>
             <div className="flex items-center gap-2">
@@ -322,53 +343,71 @@ export default function Home() {
 
           {/* Game Area */}
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
-            {/* Show Colors Phase */}
+            {/* Show Phase */}
             {showColors ? (
-              <div className="text-center">
-                <p className="text-white mb-4 text-lg">👀 Merke dir die Reihenfolge:</p>
-                <div className="flex justify-center gap-4 text-7xl mb-6">
-                  {data?.map((color: string, i: number) => (
-                    <div key={i} className="animate-pulse">{color}</div>
-                  ))}
+              isSpeedGame ? (
+                <div className="text-center">
+                  <p className="text-white mb-4 text-lg">👀 Merke dir das Signal:</p>
+                  <div className="text-9xl mb-6 animate-pulse">
+                    {Array.isArray(data) ? data[0] : data}
+                  </div>
+                  <p className="text-white/60 text-sm">Reagiere so schnell wie möglich wenn es verschwindet...</p>
                 </div>
-                <p className="text-white/60 text-sm">Die Farben verschwinden automatisch...</p>
-              </div>
+              ) : (
+                <div className="text-center">
+                  <p className="text-white mb-4 text-lg">👀 Merke dir die Reihenfolge:</p>
+                  <div className="flex justify-center gap-4 text-7xl mb-6">
+                    {data?.map((color: string, i: number) => (
+                      <div key={i} className="animate-pulse">{color}</div>
+                    ))}
+                  </div>
+                  <p className="text-white/60 text-sm">Die Farben verschwinden automatisch...</p>
+                </div>
+              )
             ) : isInputPhase ? (
-              <div>
-                <p className="text-white text-center mb-4 text-lg">🖱️ Klicke die Farben in der richtigen Reihenfolge:</p>
-
-                {/* Selected Colors */}
-                <div className="flex justify-center gap-2 mb-6 min-h-[3rem]">
-                  {selectedColors.map((color, i) => (
-                    <span key={i} className="text-4xl">{color}</span>
-                  ))}
-                  {/* Placeholder for remaining colors */}
-                  {data && Array.from({ length: data.length - selectedColors.length }).map((_, i) => (
-                    <span key={`placeholder-${i}`} className="text-4xl text-white/20">⭕</span>
-                  ))}
+              isSpeedGame ? (
+                <div className="text-center py-4">
+                  <p className="text-white mb-6 text-lg">⚡ Jetzt tippen!</p>
+                  <button
+                    onClick={() => { submitAnswer(['tapped']); }}
+                    className="w-48 h-48 mx-auto rounded-full bg-gradient-to-br from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white text-6xl font-bold shadow-2xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center"
+                  >
+                    TAP!
+                  </button>
+                  <p className="text-white/40 text-xs mt-4">Schneller = mehr Punkte</p>
                 </div>
+              ) : (
+                <div>
+                  <p className="text-white text-center mb-4 text-lg">🖱️ Klicke die Farben in der richtigen Reihenfolge:</p>
 
-                {/* Color Grid */}
-                <div className="grid grid-cols-4 gap-4">
-                  {['🔴', '🟢', '🔵', '🟡', '🟣', '🟠', '⚫', '⚪'].map((color) => {
-                    const isSelected = selectedColors.includes(color);
+                  {/* Selected Colors */}
+                  <div className="flex justify-center gap-2 mb-6 min-h-[3rem]">
+                    {selectedColors.map((color, i) => (
+                      <span key={i} className="text-4xl">{color}</span>
+                    ))}
+                    {data && Array.from({ length: data.length - selectedColors.length }).map((_, i) => (
+                      <span key={`placeholder-${i}`} className="text-4xl text-white/20">⭕</span>
+                    ))}
+                  </div>
 
-                    return (
-                      <button
-                        key={color}
-                        onClick={() => handleColorSelect(color)}
-                        disabled={isSelected}
-                        className={`
-                          p-4 text-4xl rounded-xl transition-all transform hover:scale-110
-                          ${isSelected ? 'bg-gray-500/50 opacity-30' : 'bg-white/10 hover:bg-white/30'}
-                        `}
-                      >
-                        {color}
-                      </button>
-                    );
-                  })}
+                  {/* Color Grid */}
+                  <div className="grid grid-cols-4 gap-4">
+                    {['🔴', '🟢', '🔵', '🟡', '🟣', '🟠', '⚫', '⚪'].map((color) => {
+                      const isSelected = selectedColors.includes(color);
+                      return (
+                        <button
+                          key={color}
+                          onClick={() => handleColorSelect(color)}
+                          disabled={isSelected}
+                          className={`p-4 text-4xl rounded-xl transition-all transform hover:scale-110 ${isSelected ? 'bg-gray-500/50 opacity-30' : 'bg-white/10 hover:bg-white/30'}`}
+                        >
+                          {color}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               <div className="text-center py-8">
                 <div className="animate-spin text-4xl mb-4">⏳</div>

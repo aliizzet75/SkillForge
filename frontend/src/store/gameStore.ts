@@ -258,10 +258,10 @@ export const enterLobby = async (playerName: string, avatar: string) => {
   useGameStore.getState().setInLobby(true);
 };
 
-export const playRandom = async () => {
+export const playRandom = async (gameType: number = 1) => {
   const conn = getSignalRConnection();
   if (conn) {
-    await conn.invoke('PlayRandom');
+    await conn.invoke('PlayRandom', gameType);
     useGameStore.getState().setMatchmaking(true);
   }
 };
@@ -274,9 +274,9 @@ export const cancelMatchmaking = async () => {
   }
 };
 
-export const challengePlayer = async (targetName: string) => {
+export const challengePlayer = async (targetName: string, gameType: number = 1) => {
   const conn = getSignalRConnection();
-  if (conn) await conn.invoke('ChallengePlayer', targetName);
+  if (conn) await conn.invoke('ChallengePlayer', targetName, gameType);
 };
 
 export const acceptChallenge = async () => {

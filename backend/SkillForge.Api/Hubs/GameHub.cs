@@ -42,7 +42,8 @@ public class RoomGameState
     public Dictionary<string, int> PlayerPerfectRounds { get; set; } = new();
     public object CurrentRoundData { get; set; } = null!;
     public Dictionary<string, (int timeMs, string[] answers)> PlayerRoundAnswers { get; set; } = new();
-    public MemoryColorsGame GameEngine { get; set; } = new();
+    public IGamePlugin GameEngine { get; set; } = new MemoryColorsGame();
+    public int GameTypeId { get; set; } = 1;
     public Dictionary<string, string> PlayerConnectionIds { get; set; } = new();
     public CancellationTokenSource RoundCts { get; set; } = new();
     public long RoundStartTimeMs { get; set; } = 0;
@@ -102,6 +103,8 @@ public class GameHub : Hub<IGameClient>
     private const string ChallengesKey   = "sf:challenges";     // Hash: targetConnId → challengerConnId
     private const string PlayerRoomsKey  = "sf:rooms";          // Hash: connId → roomId
     private const string ConnUsersKey    = "sf:users";          // Hash: connId → userId
+    private const string MmGameTypesKey  = "sf:mm:gametypes";   // Hash: connId → gameType
+    private const string ChallengeGameTypesKey = "sf:challenges:gametypes"; // Hash: targetConnId → gameType
 
     // Atomically find + remove a skill-matched opponent from the matchmaking queue
     private static readonly LuaScript FindOpponentScript = LuaScript.Prepare(@"
@@ -165,7 +168,7 @@ return false
 
     // ─── Matchmaking ────────────────────────────────────────────────────────
 
-    public async Task PlayRandom()
+    public async Task PlayRandom(int gameType = 1)
     {
         var connId = Context.ConnectionId;
 
@@ -175,6 +178,7 @@ return false
         sm.TransitionTo(GameState.Matchmaking);
 
         var level = await GetPlayerLevel(connId);
+        await Db.HashSetAsync(MmGameTypesKey, connId, gameType.ToString());
 
         var result = await Db.ScriptEvaluateAsync(FindOpponentScript, new
         {
@@ -192,7 +196,8 @@ return false
             if (_matchmakingTimers.TryRemove(opponentId, out var opCts))
                 opCts.Cancel();
 
-            await StartMatch(connId, opponentId);
+            await Db.HashDeleteAsync(MmGameTypesKey, opponentId);
+            await StartMatch(connId, opponentId, gameType);
         }
         else
         {
@@ -231,11 +236,12 @@ return false
         if (_matchmakingTimers.TryRemove(connId, out var cts)) cts.Cancel();
         await Db.SortedSetRemoveAsync(MmQueueKey, connId);
         await Db.HashDeleteAsync(MmLevelsKey, connId);
+        await Db.HashDeleteAsync(MmGameTypesKey, connId);
     }
 
     // ─── Challenge ──────────────────────────────────────────────────────────
 
-    public async Task ChallengePlayer(string targetName)
+    public async Task ChallengePlayer(string targetName, int gameType = 1)
     {
         var challengerId = Context.ConnectionId;
 
@@ -244,6 +250,7 @@ return false
 
         var targetConnId = targetConnIdRaw.ToString();
         await Db.HashSetAsync(ChallengesKey, targetConnId, challengerId);
+        await Db.HashSetAsync(ChallengeGameTypesKey, targetConnId, gameType.ToString());
 
         string challengerName = "Unknown";
         string challengerAvatar = "🧙‍♀️";
@@ -266,6 +273,10 @@ return false
         var challengerId = challengerIdRaw.ToString();
         await Db.HashDeleteAsync(ChallengesKey, acceptingId);
 
+        var gameTypeRaw = await Db.HashGetAsync(ChallengeGameTypesKey, acceptingId);
+        var gameType = gameTypeRaw.IsNullOrEmpty || !int.TryParse(gameTypeRaw.ToString(), out var gt) ? 1 : gt;
+        await Db.HashDeleteAsync(ChallengeGameTypesKey, acceptingId);
+
         foreach (var id in new[] { challengerId, acceptingId })
         {
             if (_matchmakingTimers.TryRemove(id, out var cts)) cts.Cancel();
@@ -285,7 +296,7 @@ return false
         }
 
         await Clients.Client(challengerId).ChallengeAccepted(acceptingName);
-        await StartMatch(challengerId, acceptingId);
+        await StartMatch(challengerId, acceptingId, gameType);
     }
 
     public async Task DeclineChallenge()
@@ -310,7 +321,13 @@ return false
 
     // ─── Match ──────────────────────────────────────────────────────────────
 
-    private async Task StartMatch(string player1Id, string player2Id)
+    private static IGamePlugin CreateGamePlugin(int gameType) => gameType switch
+    {
+        2 => new SpeedReactionGame(),
+        _ => new MemoryColorsGame()
+    };
+
+    private async Task StartMatch(string player1Id, string player2Id, int gameType = 1)
     {
         string p1Name = "Player1", p1Avatar = "🧙‍♀️";
         string p2Name = "Player2", p2Avatar = "🧙‍♂️";
@@ -333,7 +350,7 @@ return false
         await Db.HashSetAsync(PlayerRoomsKey, player1Id, roomId);
         await Db.HashSetAsync(PlayerRoomsKey, player2Id, roomId);
 
-        var gs = new RoomGameState();
+        var gs = new RoomGameState { GameEngine = CreateGamePlugin(gameType), GameTypeId = gameType };
         gs.PlayerConnectionIds[player1Id] = "Player1";
         gs.PlayerConnectionIds[player2Id] = "Player2";
         _roomGameStates[roomId] = gs;
@@ -344,8 +361,8 @@ return false
         await Clients.Client(player1Id).PlayerAssigned("Player1");
         await Clients.Client(player2Id).PlayerAssigned("Player2");
 
-        await Clients.Client(player1Id).MatchFound(p2Name, p2Avatar, 1, 1, 3);
-        await Clients.Client(player2Id).MatchFound(p1Name, p1Avatar, 1, 1, 3);
+        await Clients.Client(player1Id).MatchFound(p2Name, p2Avatar, gameType, 1, 3);
+        await Clients.Client(player2Id).MatchFound(p1Name, p1Avatar, gameType, 1, 3);
 
         foreach (var pid in new[] { player1Id, player2Id })
         {
@@ -510,7 +527,7 @@ return false
                 sm.TransitionTo(GameState.GameEnded);
         }
 
-        await SaveMatchResultsToDatabase(p1Id, p2Id, p1Score, p2Score, winner, isTie, p1Xp, p2Xp);
+        await SaveMatchResultsToDatabase(p1Id, p2Id, p1Score, p2Score, winner, isTie, p1Xp, p2Xp, gs.GameTypeId);
     }
 
     // ─── Lobby leave ────────────────────────────────────────────────────────
@@ -522,6 +539,7 @@ return false
         if (_matchmakingTimers.TryRemove(connId, out var cts)) cts.Cancel();
         await Db.SortedSetRemoveAsync(MmQueueKey, connId);
         await Db.HashDeleteAsync(MmLevelsKey, connId);
+        await Db.HashDeleteAsync(MmGameTypesKey, connId);
         _playerStates.TryRemove(connId, out _);
 
         var roomIdRaw = await Db.HashGetAsync(PlayerRoomsKey, connId);
@@ -576,7 +594,9 @@ return false
         if (_matchmakingTimers.TryRemove(connId, out var cts)) cts.Cancel();
         await Db.SortedSetRemoveAsync(MmQueueKey, connId);
         await Db.HashDeleteAsync(MmLevelsKey, connId);
+        await Db.HashDeleteAsync(MmGameTypesKey, connId);
         await Db.HashDeleteAsync(ChallengesKey, connId);
+        await Db.HashDeleteAsync(ChallengeGameTypesKey, connId);
 
         var roomIdRaw = await Db.HashGetAsync(PlayerRoomsKey, connId);
         if (!roomIdRaw.IsNullOrEmpty)
@@ -640,7 +660,7 @@ return false
         return user?.CurrentLevel ?? 1;
     }
 
-    private async Task SaveMatchResultsToDatabase(string p1Id, string p2Id, int p1Score, int p2Score, string winner, bool isTie, int p1Xp, int p2Xp)
+    private async Task SaveMatchResultsToDatabase(string p1Id, string p2Id, int p1Score, int p2Score, string winner, bool isTie, int p1Xp, int p2Xp, int gameType = 1)
     {
         var p1UserIdRaw = await Db.HashGetAsync(ConnUsersKey, p1Id);
         var p2UserIdRaw = await Db.HashGetAsync(ConnUsersKey, p2Id);
@@ -653,9 +673,9 @@ return false
             try
             {
                 if (!string.IsNullOrEmpty(p1UserId))
-                    await SavePlayerMatchResult(p1UserId, 1, p1Score, winner == "Player1" && !isTie, p1Xp);
+                    await SavePlayerMatchResult(p1UserId, gameType, p1Score, winner == "Player1" && !isTie, p1Xp);
                 if (!string.IsNullOrEmpty(p2UserId))
-                    await SavePlayerMatchResult(p2UserId, 1, p2Score, winner == "Player2" && !isTie, p2Xp);
+                    await SavePlayerMatchResult(p2UserId, gameType, p2Score, winner == "Player2" && !isTie, p2Xp);
                 return;
             }
             catch (Exception ex)
@@ -693,7 +713,7 @@ return false
         }
 
         // Update UserSkill for skill-specific type and "overall"
-        var skillType = gameType == 1 ? "memory" : "overall";
+        var skillType = gameType switch { 1 => "memory", 2 => "speed", _ => "overall" };
         foreach (var st in new[] { skillType, "overall" }.Distinct())
         {
             var skill = await db.UserSkills.FirstOrDefaultAsync(s => s.UserId == userGuid && s.SkillType == st);
@@ -726,12 +746,15 @@ return false
 
         await db.SaveChangesAsync();
 
-        // Refresh leaderboard view asynchronously — fire and forget, non-blocking
+        // Refresh leaderboard view asynchronously — fire and forget, non-blocking.
+        // Uses a fresh scope so the captured db (from the outer using scope) is not accessed after disposal.
         _ = Task.Run(async () =>
         {
             try
             {
-                await db.Database.ExecuteSqlRawAsync(
+                using var refreshScope = _scopeFactory.CreateScope();
+                var refreshDb = refreshScope.ServiceProvider.GetRequiredService<SkillForgeDbContext>();
+                await refreshDb.Database.ExecuteSqlRawAsync(
                     "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_leaderboard");
             }
             catch { /* view refresh is best-effort */ }
