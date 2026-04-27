@@ -1,9 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using SkillForge.Core.Data;
 
 #nullable disable
 
 namespace SkillForge.Core.Migrations
 {
+    [DbContext(typeof(SkillForgeDbContext))]
+    [Migration("20260427060000_AddLeaderboardView")]
     public partial class AddLeaderboardView : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
