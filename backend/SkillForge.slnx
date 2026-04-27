@@ -2,5 +2,6 @@
   <Project Path="SkillForge.AI/SkillForge.AI.csproj" />
   <Project Path="SkillForge.Api/SkillForge.Api.csproj" />
   <Project Path="SkillForge.Core/SkillForge.Core.csproj" />
+  <Project Path="SkillForge.Games.Tests/SkillForge.Games.Tests.csproj" />
   <Project Path="SkillForge.Games/SkillForge.Games.csproj" />
 </Solution>
