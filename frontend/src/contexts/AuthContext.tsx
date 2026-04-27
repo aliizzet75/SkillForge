@@ -24,47 +24,41 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-
   useEffect(() => {
-    // Check for existing token on mount
     const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-      fetchUser(storedToken);
-    } else {
+    if (!storedToken) {
       setIsLoading(false);
+      return;
     }
-  }, []);
-
-  const fetchUser = async (authToken: string) => {
-    try {
-      const response = await fetch(`${API_URL}/api/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
+    setToken(storedToken);
+    fetch(`${API_URL}/api/auth/me`, {
+      headers: { 'Authorization': `Bearer ${storedToken}` }
+    })
+      .then(async (response) => {
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+          if (userData.avatar) localStorage.setItem('avatar', userData.avatar);
+        } else {
+          // Token expired or invalid (401/403) — clear stored credentials
+          localStorage.removeItem('token');
+          localStorage.removeItem('avatar');
+          setToken(null);
+          setUser(null);
         }
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-        if (userData.avatar) localStorage.setItem('avatar', userData.avatar);
-      } else {
-        // Token invalid, clear it
-        localStorage.removeItem('token');
-        setToken(null);
-      }
-    } catch (error) {
-      console.error('Failed to fetch user:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      })
+      .catch((error) => {
+        console.error('Failed to fetch user:', error);
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {

@@ -1,11 +1,15 @@
 using System;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using SkillForge.Core.Data;
 
 #nullable disable
 
 namespace SkillForge.Core.Migrations
 {
-    /// <inheritdoc />
+    [DbContext(typeof(SkillForgeDbContext))]
+    [Migration("20260426220000_AddSkillSnapshot")]
     public partial class AddSkillSnapshot : Migration
     {
         /// <inheritdoc />

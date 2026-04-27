@@ -3,13 +3,20 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Core.Models;
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
 namespace SkillForge.Api.Controllers;
 
 public class UpdateAvatarRequest
 {
+    [Required, MinLength(1)]
     public string Avatar { get; set; } = "🧙‍♀️";
+}
+
+internal static class AllowedAvatars
+{
+    internal static readonly HashSet<string> Values = ["🧙‍♀️", "🧙‍♂️", "🦸‍♀️", "🦸‍♂️", "👩‍🔬", "👨‍🔬", "🧚‍♀️", "🧚‍♂️", "👩‍🚀", "👨‍🚀"];
 }
 
 [ApiController]
@@ -197,6 +204,9 @@ public class UsersController : ControllerBase
         var callerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (callerId == null || !Guid.TryParse(callerId, out var callerGuid) || callerGuid != id)
             return Forbid();
+
+        if (!AllowedAvatars.Values.Contains(request.Avatar))
+            return BadRequest(new { error = "Invalid avatar" });
 
         var user = await _context.Users.FindAsync(id);
         if (user == null) return NotFound(new { error = "User not found" });

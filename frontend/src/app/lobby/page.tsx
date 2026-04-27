@@ -36,7 +36,7 @@ function LobbyPageContent() {
   useEffect(() => {
     if (user && isAuthenticated && !isInLobby && !isConnecting) {
       setIsConnecting(true);
-      enterLobby(user.username, user.skills?.[0]?.type || '🧠')
+      enterLobby(user.username, user.avatar || '🧙‍♀️')
         .then(() => setIsConnecting(false))
         .catch((err) => {
           console.error('Failed to enter lobby:', err);

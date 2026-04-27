@@ -22,6 +22,37 @@ namespace SkillForge.Core.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("SkillForge.Core.Models.MatchHistory", b =>
+                {
+                    b.Property<Guid>("MatchId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("GameType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("PlayedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Won")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("XPEarned")
+                        .HasColumnType("integer");
+
+                    b.HasKey("MatchId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("MatchHistories");
+                });
+
             modelBuilder.Entity("SkillForge.Core.Models.GameRound", b =>
                 {
                     b.Property<long>("Id")
@@ -253,6 +284,17 @@ namespace SkillForge.Core.Migrations
                     b.HasIndex("SkillType", "XP");
 
                     b.ToTable("UserSkills");
+                });
+
+            modelBuilder.Entity("SkillForge.Core.Models.MatchHistory", b =>
+                {
+                    b.HasOne("SkillForge.Core.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("SkillForge.Core.Models.GameRound", b =>
