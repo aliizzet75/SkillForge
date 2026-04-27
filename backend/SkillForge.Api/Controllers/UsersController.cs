@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SkillForge.Core.Data;
 using SkillForge.Core.Models;
+using System.Security.Claims;
 
 namespace SkillForge.Api.Controllers;
 
@@ -101,9 +103,14 @@ public class UsersController : ControllerBase
         return Ok(new { userId = id, skillType, days, snapshots });
     }
 
+    [Authorize]
     [HttpGet("{id:guid}/insights")]
     public async Task<IActionResult> GetInsights(Guid id)
     {
+        var callerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (callerId == null || !Guid.TryParse(callerId, out var callerGuid) || callerGuid != id)
+            return Forbid();
+
         var user = await _context.Users.FindAsync(id);
         if (user == null)
             return NotFound(new { error = "User not found" });
@@ -128,7 +135,6 @@ public class UsersController : ControllerBase
 
             if (thisWeek.Count == 0) continue;
 
-            var xpThisWeek = thisWeek.Last().XP - (thisWeek.First().XP - (thisWeek.FirstOrDefault()?.XP ?? 0));
             var xpGainedThisWeek = thisWeek.Count > 1 ? thisWeek.Last().XP - thisWeek.First().XP : 0;
             var xpGainedLastWeek = lastWeek.Count > 1 ? lastWeek.Last().XP - lastWeek.First().XP : 0;
 

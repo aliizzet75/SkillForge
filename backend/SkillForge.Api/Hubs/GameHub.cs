@@ -726,12 +726,15 @@ return false
 
         await db.SaveChangesAsync();
 
-        // Refresh leaderboard view asynchronously — fire and forget, non-blocking
+        // Refresh leaderboard view asynchronously — fire and forget, non-blocking.
+        // Uses a fresh scope so the captured db (from the outer using scope) is not accessed after disposal.
         _ = Task.Run(async () =>
         {
             try
             {
-                await db.Database.ExecuteSqlRawAsync(
+                using var refreshScope = _scopeFactory.CreateScope();
+                var refreshDb = refreshScope.ServiceProvider.GetRequiredService<SkillForgeDbContext>();
+                await refreshDb.Database.ExecuteSqlRawAsync(
                     "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_leaderboard");
             }
             catch { /* view refresh is best-effort */ }
