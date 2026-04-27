@@ -53,36 +53,40 @@
 
 ---
 
-## M4: Leaderboard + Skill-Tracking 📊
+## M4: Leaderboard + Skill-Tracking 📊 ✅ FERTIG
 
 **Ziel:** Spieler sehen ihren Fortschritt und Ranking
 
 | Task | Beschreibung | Status |
 |------|--------------------------------------------------|------|
-| ⏳ T4.1 | Leaderboard-API: Global + Land + Skill-Typ | Offen |
-| ⏳ T4.2 | Percentile-Berechnung nach jedem Match | Offen |
-| ⏳ T4.3 | Skill-History: Trendverlauf (Grafik) | Offen |
-| ⏳ T4.4 | Frontend: Leaderboard mit Filtern | Offen |
-| ⏳ T4.5 | Frontend: Spielerprofil mit Radar-Chart | Offen |
-| ⏳ T4.6 | Insights: "Dein Memory hat sich um 15% verbessert" | Offen |
-| ⏳ T4.7 | Materialized View für Leaderboard-Cache | Offen |
+| ✅ T4.1 | Leaderboard-API: Global + Land + Skill-Typ | Gemerged |
+| ✅ T4.2 | Percentile-Berechnung nach jedem Match | Gemerged |
+| ✅ T4.3 | Skill-History: Trendverlauf (Grafik) | Gemerged |
+| ✅ T4.4 | Frontend: Leaderboard mit Filtern | Gemerged |
+| ✅ T4.5 | Frontend: Spielerprofil mit Radar-Chart | Gemerged |
+| ✅ T4.6 | Insights: "Dein Memory hat sich um 15% verbessert" | Gemerged |
+| ✅ T4.7 | Materialized View für Leaderboard-Cache | Gemerged |
+
+**Definition of Done:** Spieler sehen Leaderboard, eigenes Profil mit Radar-Chart, Skill-Trends über Zeit. ✅
 
 ---
 
-## M5: Zweites Spiel + Plugin-System ⚡
+## M5: Zweites Spiel + Plugin-System ⚡ ✅ FERTIG
 
 **Ziel:** Zweites Spiel (Speed) als Proof-of-Concept
 
 | Task | Beschreibung | Status |
 |------|---------------------------------------------|------|
-| ⏳ T5.1 | SpeedGame Plugin implementieren (IGamePlugin) | Offen |
-| ⏳ T5.2 | Game-Auswahl in Lobby | Offen |
-| ⏳ T5.3 | Skill-Gewichtung pro Spiel (Memory vs Speed) | Offen |
-| ⏳ T5.4 | Frontend: Spiel-spezifische UI | Offen |
+| ✅ T5.1 | SpeedGame Plugin implementieren (IGamePlugin) | Gemerged |
+| ✅ T5.2 | Game-Auswahl in Lobby | Gemerged |
+| ✅ T5.3 | Skill-Gewichtung pro Spiel (Memory vs Speed) | Gemerged |
+| ✅ T5.4 | Frontend: Spiel-spezifische UI | Gemerged |
 | ⏳ T5.5 | Tests: KI-Agent testet beide Spiele | Offen |
+
+**Definition of Done:** SpeedReactionGame als zweites Spiel, Game-Type Auswahl in Lobby, beide Spiele spielbar. ✅
 
 ---
 
-**Aktueller Fokus:** M4 — Leaderboard & Skill-Tracking
+**Aktueller Fokus:** M6 — TBD (Tests / Performance / Polish)
 
-_Updated: 2026-04-26_
+_Updated: 2026-04-27_
