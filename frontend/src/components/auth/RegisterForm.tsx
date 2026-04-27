@@ -14,8 +14,15 @@ export default function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [avatar, setAvatar] = useState('🧙‍♀️');
   const [error, setError] = useState('');
-  const { register, isLoading } = useAuth();
+  const [registerAttempted, setRegisterAttempted] = useState(false);
+  const { register, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (registerAttempted && isAuthenticated) {
+      router.push('/lobby');
+    }
+  }, [registerAttempted, isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +45,7 @@ export default function RegisterForm() {
 
     const result = await register(username, email, password, avatar);
     if (result === true) {
-      router.push('/lobby');
+      setRegisterAttempted(true);
     } else {
       setError(result);
     }
