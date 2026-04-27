@@ -39,15 +39,15 @@ export default function LoginForm() {
 
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-          Email
+          Username or Email
         </label>
         <input
-          type="email"
+          type="text"
           id="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
-          placeholder="you@example.com"
+          placeholder="username or you@example.com"
           required
         />
       </div>

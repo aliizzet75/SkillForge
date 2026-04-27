@@ -85,9 +85,10 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
+        var input = request.UsernameOrEmail;
         var user = await _context.Users
             .Include(u => u.Skills)
-            .FirstOrDefaultAsync(u => u.Username == request.Username);
+            .FirstOrDefaultAsync(u => u.Username == input || u.Email == input);
 
         if (user == null || !VerifyPassword(request.Password, user.PasswordHash!))
         {
@@ -189,4 +190,6 @@ public class LoginRequest
 {
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public string UsernameOrEmail => !string.IsNullOrEmpty(Username) ? Username : (Email ?? string.Empty);
 }

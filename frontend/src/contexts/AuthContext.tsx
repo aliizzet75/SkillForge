@@ -16,7 +16,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (username: string, email: string, password: string, avatar?: string) => Promise<boolean>;
+  register: (username: string, email: string, password: string, avatar?: string) => Promise<string | true>;
   updateAvatar: (avatar: string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ username: email, password })
       });
 
       if (!response.ok) {
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (username: string, email: string, password: string, avatar?: string): Promise<boolean> => {
+  const register = async (username: string, email: string, password: string, avatar?: string): Promise<string | true> => {
     try {
       setIsLoading(true);
       const response = await fetch(`${API_URL}/api/auth/register`, {
@@ -98,8 +98,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Registration failed');
+        let msg = 'Registration failed';
+        try {
+          const body = await response.json();
+          msg = body.error || body.message || msg;
+        } catch {
+          msg = (await response.text()) || msg;
+        }
+        return msg;
       }
 
       const data = await response.json();
@@ -110,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       console.error('Registration error:', error);
-      return false;
+      return error instanceof Error ? error.message : 'Network error — check connection';
     } finally {
       setIsLoading(false);
     }
