@@ -36,19 +36,16 @@ export default function Home() {
   // Initialize SignalR on mount; pre-fill name+avatar from stored profile
   useEffect(() => {
     initializeSignalR();
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      const storedAvatar = localStorage.getItem('avatar');
-      if (token) {
-        setIsLoggedIn(true);
-        if (storedAvatar) setAvatar(storedAvatar);
-        // fetch username from /api/auth/me
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-        fetch(`${apiUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
-          .then(r => r.ok ? r.json() : null)
-          .then(data => { if (data?.username) setPlayerName(data.username); if (data?.avatar) { setAvatar(data.avatar); localStorage.setItem('avatar', data.avatar); } })
-          .catch(() => {});
-      }
+    const token = localStorage.getItem('token');
+    const storedAvatar = localStorage.getItem('avatar');
+    if (token) {
+      setIsLoggedIn(true);
+      if (storedAvatar) setAvatar(storedAvatar);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+      fetch(`${apiUrl}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.username) setPlayerName(data.username); if (data?.avatar) { setAvatar(data.avatar); localStorage.setItem('avatar', data.avatar); } })
+        .catch(() => {});
     }
   }, []);
 

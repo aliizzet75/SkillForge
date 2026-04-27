@@ -127,7 +127,9 @@ public class AuthController : ControllerBase
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!Guid.TryParse(userId, out var guid)) return Unauthorized();
 
-        var user = await _context.Users.FindAsync(guid);
+        var user = await _context.Users
+            .Include(u => u.Skills)
+            .FirstOrDefaultAsync(u => u.Id == guid);
         if (user == null) return NotFound();
 
         return Ok(new
@@ -136,8 +138,16 @@ public class AuthController : ControllerBase
             username = user.Username,
             email = user.Email,
             avatar = user.Avatar ?? "🧙‍♀️",
+            countryCode = user.CountryCode,
             currentLevel = user.CurrentLevel,
-            totalXp = user.TotalXp
+            totalXp = user.TotalXp,
+            skills = user.Skills.Select(s => new
+            {
+                type = s.SkillType,
+                level = s.Level,
+                xp = s.XP,
+                percentile = s.Percentile
+            })
         });
     }
 
