@@ -1,0 +1,9 @@
+Collecting neo4j
+  Downloading neo4j-6.2.0-py3-none-any.whl.metadata (5.3 kB)
+Collecting pytz (from neo4j)
+  Downloading pytz-2026.2-py2.py3-none-any.whl.metadata (22 kB)
+Downloading neo4j-6.2.0-py3-none-any.whl (327 kB)
+Downloading pytz-2026.2-py2.py3-none-any.whl (510 kB)
+Installing collected packages: pytz, neo4j
+
+Successfully installed neo4j-6.2.0 pytz-2026.2
