@@ -25,9 +25,23 @@ services:
     networks:
       - skillforge-network
 
+  neo4j:
+    image: neo4j:5
+    container_name: skillforge-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/lexwolf123
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - skillforge-network
+
 volumes:
   postgres_data:
   redis_data:
+  neo4j_data:
 
 networks:
   skillforge-network:
